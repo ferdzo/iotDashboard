@@ -1,2 +1,4 @@
 /iotDashboard/.env
 /.idea
+db.sqlite3
+demo.db
