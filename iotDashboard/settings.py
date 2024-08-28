@@ -11,6 +11,9 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 import environ
 from pathlib import Path
+import os
+from huey import SqliteHuey
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -24,6 +27,7 @@ environ.Env.read_env()
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = env('SECRET_KEY')
+CONNECTION_STRING = env('CONNECTION_STRING')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -40,6 +44,9 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'iotDashboard',
+    'huey.contrib.djhuey',
+
 ]
 
 MIDDLEWARE = [
@@ -57,7 +64,7 @@ ROOT_URLCONF = 'iotDashboard.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [os.path.join(BASE_DIR, 'iotDashboard/templates')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -86,8 +93,8 @@ DATABASES = {
         "NAME" : "example",
         "USER": "postgres",
         "PASSWORD": env('PASSWORD'),
-        "HOST": 'localhost',
-        "PORT": '5432',
+        "HOST": '10.10.0.1',
+        "PORT": '5555',
     }
 }
 
@@ -132,3 +139,13 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+HUEY = {
+    'huey_class': 'huey.SqliteHuey',  # Or 'huey.RedisHuey' for Redis
+    'filename': 'demo.db',  # SQLite file for task storage
+    'results': True,
+    'store_none': False,
+    'immediate': False,
+    'utc': True,
+}

@@ -1,18 +1,23 @@
+import dotenv
 import psycopg2
 from psycopg2 import sql
 from datetime import datetime
 import requests
 from huey import SqliteHuey, crontab
+from dotenv import load_dotenv
+from pathlib import Path
+
 
 # Initialize scheduler
 huey = SqliteHuey(filename='demo.db')
-
+dotenv_path = Path("iotDashboard/.env")
+load_dotenv(dotenv_path=dotenv_path)
+CONNECTION = dotenv.dotenv_values(dotenv_path)["CONNECTION_STRING"]
 # Database connection
-CONNECTION = "postgres://postgres:postgres*@localhost:5432/example"
 conn = psycopg2.connect(CONNECTION)
 
 # Devices
-devices = {"livingroom": "192.168.1.56","bedroom":"192.168.1.57"}
+devices = {"livingroom": "192.168.244.131"}
 
 
 # Func for fetching data from device using REST API
@@ -20,7 +25,7 @@ def fetch_data_from_device(device):
     data = dict()
     data["time"] = datetime.now()
     data["device"] = device
-    r = requests.get("http://" + devices[device] + "/sensor/temperature")
+    r = requests.get("http://" + devices[device] + "/sensor/tempreature")
     data["temperature"] = r.json()['value']
     r = requests.get("http://" + devices[device] + "/sensor/humidity")
     data["humidity"] = r.json()['value']

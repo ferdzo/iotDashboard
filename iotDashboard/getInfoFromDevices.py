@@ -1,6 +1,6 @@
 import requests
 
-devices = {"livingroom":"192.168.1.56"}
+devices = {"esp1":"192.168.244.131"}
 
 def getTemp(device):
     r = requests.get("http://"+devices[device]+"/sensor/temperature")
