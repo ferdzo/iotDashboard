@@ -64,11 +64,11 @@ def start_mqtt_client():
     # Keep the script running
     try:
         while True:
-            time.sleep(10)  # Sleep to prevent high CPU usage
+            time.sleep(10)
     except KeyboardInterrupt:
         print("Script interrupted by user")
     finally:
-        client.loop_stop()  # Stop the loop when exiting
+        client.loop_stop()
 
 
 if __name__ == "__main__":
