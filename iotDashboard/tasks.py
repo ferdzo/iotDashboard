@@ -1,12 +1,13 @@
 import json
-import redis
+import datetime
 import requests
 import psycopg2
-import datetime
 from django.conf import settings
 from huey import crontab
 from huey.contrib.djhuey import periodic_task
 from .models import Device
+import redis
+
 
 # Initialize Redis client
 redis_client = redis.StrictRedis(host='10.10.0.1', port=6379, db=0)
@@ -34,7 +35,7 @@ def fetch_data_http(device):
         "device": device.name,
     }
     try:
-        temperature_response = requests.get(f"http://{device.ip}/sensor/temperature")
+        temperature_response = requests.get(f"http://{device.ip}/sensor/tempreature")
         humidity_response = requests.get(f"http://{device.ip}/sensor/humidity")
         data["temperature"] = temperature_response.json().get('value')
         data["humidity"] = humidity_response.json().get('value')
