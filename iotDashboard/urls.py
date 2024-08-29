@@ -27,6 +27,5 @@ urlpatterns = [
     path('devices/add/', views.add_device, name='add_device'),
     path('devices/edit/<int:pk>/', views.edit_device, name='edit_device'),
     path('devices/delete/<int:pk>/', views.delete_device, name='delete_device'),
-    path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
 ]

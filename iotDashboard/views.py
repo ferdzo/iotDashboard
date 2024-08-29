@@ -46,7 +46,7 @@ def chart(request):
 
 def index(request):
     if request.user.is_authenticated:
-        return HttpResponse(chart())
+        return redirect("/chart/")
     return HttpResponse("NOT AUTHENTICATED!!!")
 def device_list(request):
     devices = Device.objects.all()
@@ -80,7 +80,5 @@ def delete_device(request, pk):
         return redirect('device_list')
     return render(request, 'device_confirm_delete.html', {'device': device})
 
-def login_view():
-    pass
 def logout_view():
-    pass
+    redirect("/admin")
