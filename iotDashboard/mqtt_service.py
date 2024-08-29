@@ -46,8 +46,19 @@ def on_message(client, userdata, msg):
 
     mqtt_data[device_name]["time"] = str(datetime.now())
     redis_client.set(device_name, json.dumps(mqtt_data))
-    # Update time on receiving each message
-    print(mqtt_data)
+    print(f"Updated data for {device_name}: {mqtt_data[device_name]}")
+
+def on_connect(client, userdata, flags, rc):
+    """Handle successful connection."""
+    print(f"Connected with result code {rc}")
+    devices = get_devices()
+    for device in devices:
+        client.subscribe(f"{device['name']}/sensor/+/state")
+
+def on_disconnect(client, userdata, rc):
+    """Handle disconnection."""
+    if rc != 0:
+        print(f"Unexpected disconnection. Result code: {rc}")
 
 def start_mqtt_client():
     """ Start the MQTT client """
@@ -55,6 +66,8 @@ def start_mqtt_client():
 
     client = mqtt.Client()
     client.on_message = on_message
+    client.on_connect = on_connect
+    client.on_disconnect = on_disconnect
     client.connect(MQTT_BROKER)
     client.loop_start()
     print("MQTT Client Started")
@@ -64,11 +77,11 @@ def start_mqtt_client():
     # Keep the script running
     try:
         while True:
-            time.sleep(10)
+            time.sleep(10)  # Sleep to prevent high CPU usage
     except KeyboardInterrupt:
         print("Script interrupted by user")
     finally:
-        client.loop_stop()
+        client.loop_stop()  # Stop the loop when exiting
 
 
 if __name__ == "__main__":
