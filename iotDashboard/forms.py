@@ -1,48 +1,72 @@
 from django import forms
 from .models import Device, Sensor, SensorType
 
-# Form for adding/editing devices
 class DeviceForm(forms.ModelForm):
-    class Meta:
-        model = Device
-        fields = ['name', 'ip', 'protocol']  # Fields based on your Device model
-        widgets = {
-            'name': forms.TextInput(attrs={'class': 'form-control'}),
-            'ip': forms.TextInput(attrs={'class': 'form-control'}),
-            'protocol': forms.Select(attrs={'class': 'form-control'}),
-        }
-
-# Form for adding a sensor with its type, including topic and endpoint for SensorType
-class SensorWithTypeForm(forms.ModelForm):
-    type = forms.ModelChoiceField(
-        queryset=SensorType.objects.all(),
-        widget=forms.Select(attrs={'class': 'form-control'}),
-        label="Sensor Type"
+    # Optionally include sensors as choices in the form if relevant
+    sensors = forms.ModelMultipleChoiceField(
+        queryset=Sensor.objects.all(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+        label='Sensors'
     )
 
     class Meta:
-        model = Sensor
-        fields = ['device', 'type', 'enabled']  # Fields from your Sensor model
-        widgets = {
-            'device': forms.Select(attrs={'class': 'form-control'}),
-            'enabled': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-        }
+        model = Device
+        fields = ['name', 'ip', 'protocol']
+
+    def __init__(self, *args, **kwargs):
+        # Optionally pass initial sensors for editing an existing device
+        if 'instance' in kwargs:
+            initial_sensors = kwargs['instance'].sensors.all() if kwargs['instance'] else None
+            initial = kwargs.get('initial', {})
+            initial['sensors'] = initial_sensors
+            kwargs['initial'] = initial
+        super(DeviceForm, self).__init__(*args, **kwargs)
 
     def save(self, commit=True):
-        sensor = super().save(commit=False)
+        # Save the device instance
+        device = super(DeviceForm, self).save(commit=False)
+
+        if commit:
+            device.save()
+            self.save_m2m()  # Ensure M2M save happens
+
+        return device
+class SensorWithTypeForm(forms.ModelForm):
+    # Add fields for SensorType directly in the form
+    type_name = forms.CharField(max_length=50, label="Sensor Type Name")
+    unit = forms.CharField(max_length=20, label="Unit", required=False)
+    protocol = forms.ChoiceField(
+        choices=[('mqtt', 'MQTT'), ('http', 'HTTP')],
+        label="Protocol"
+    )
+    topic = forms.CharField(max_length=100, label="Topic", required=False)
+    endpoint = forms.CharField(max_length=100, label="Endpoint", required=False)
+
+    class Meta:
+        model = Sensor
+        fields = ['device', 'enabled']
+
+    def save(self, commit=True):
+        # Create or get the SensorType
+        try:
+            sensor_type = SensorType.objects.get(name=self.cleaned_data['type_name'])
+        except SensorType.DoesNotExist:
+            sensor_type = SensorType(
+                name=self.cleaned_data['type_name'],
+                unit=self.cleaned_data['unit'],
+                protocol=self.cleaned_data['protocol'],
+                topic=self.cleaned_data['topic'],
+                endpoint=self.cleaned_data['endpoint']
+            )
+            if commit:
+                sensor_type.save()
+
+        # Create Sensor with the SensorType found or created
+        sensor = super(SensorWithTypeForm, self).save(commit=False)
+        sensor.type = sensor_type
+
         if commit:
             sensor.save()
-        return sensor
 
-# Form for creating or editing SensorType
-class SensorTypeForm(forms.ModelForm):
-    class Meta:
-        model = SensorType
-        fields = ['name', 'unit', 'protocol', 'topic', 'endpoint']  # Fields from your SensorType model
-        widgets = {
-            'name': forms.TextInput(attrs={'class': 'form-control'}),
-            'unit': forms.TextInput(attrs={'class': 'form-control'}),
-            'protocol': forms.Select(attrs={'class': 'form-control'}),
-            'topic': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Optional for MQTT'}),
-            'endpoint': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Optional for HTTP'}),
-        }
+        return sensor
