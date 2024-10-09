@@ -105,7 +105,7 @@ def insert_data(data, sensor_type):
     except Exception as e:
         print(f"Failed to insert data: {e}")
 
-@periodic_task(crontab(minute='*/1'))
+@periodi    c_task(crontab(minute='*/1'))
 def fetch_data_from_all_devices():
     """Fetch and insert data for all devices based on their protocol."""
     devices = Device.objects.all()
