@@ -46,7 +46,9 @@
             {% csrf_token %}
             <div class="mb-3">
                 <!-- Display the form fields -->
-                {{ form.as_p }}
+                {{ form.name.label_tag }} {{ form.name }}<br>
+                {{ form.ip.label_tag }} {{ form.ip }}<br>
+                {{ form.protocol.label_tag }} {{ form.protocol }}<br>
 
                 <!-- If there are errors, display them -->
                 {% if form.errors %}
@@ -64,6 +66,14 @@
             <button type="submit" class="btn btn-success">Save</button>
             <a href="{% url 'device_list' %}" class="btn btn-secondary">Cancel</a>
         </form>
+
+        <!-- Links for adding/editing sensors for this specific device -->
+        <div class="mt-4">
+            {% if form.instance.pk %}
+                <a href="{% url 'add_sensor' form.instance.pk %}" class="btn btn-primary">Add Sensor</a>
+                <a href="{% url 'sensor_list' form.instance.pk %}" class="btn btn-info">Edit Sensors</a>
+            {% endif %}
+        </div>
     </div>
 </body>
 </html>

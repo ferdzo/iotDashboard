@@ -1,26 +1,14 @@
 from django import forms
 from .models import Device, Sensor, SensorType
 
-class DeviceForm(forms.ModelForm):
-    # Optionally include sensors as choices in the form if relevant
-    sensors = forms.ModelMultipleChoiceField(
-        queryset=Sensor.objects.all(),
-        required=False,
-        widget=forms.CheckboxSelectMultiple,
-        label='Sensors'
-    )
 
+class DeviceForm(forms.ModelForm):
     class Meta:
         model = Device
-        fields = ['name', 'ip', 'protocol']
+        fields = ['name', 'ip', 'protocol']  # Exclude sensors from the fields
 
     def __init__(self, *args, **kwargs):
-        # Optionally pass initial sensors for editing an existing device
-        if 'instance' in kwargs:
-            initial_sensors = kwargs['instance'].sensors.all() if kwargs['instance'] else None
-            initial = kwargs.get('initial', {})
-            initial['sensors'] = initial_sensors
-            kwargs['initial'] = initial
+        # No need to handle sensors in the form
         super(DeviceForm, self).__init__(*args, **kwargs)
 
     def save(self, commit=True):
@@ -29,7 +17,6 @@ class DeviceForm(forms.ModelForm):
 
         if commit:
             device.save()
-            self.save_m2m()  # Ensure M2M save happens
 
         return device
 class SensorWithTypeForm(forms.ModelForm):
@@ -45,7 +32,11 @@ class SensorWithTypeForm(forms.ModelForm):
 
     class Meta:
         model = Sensor
-        fields = ['device', 'enabled']
+        fields = ['enabled']  # Exclude 'device' from the form fields
+
+    def __init__(self, *args, **kwargs):
+        self.device = kwargs.pop('device', None)  # Get the device from kwargs
+        super(SensorWithTypeForm, self).__init__(*args, **kwargs)
 
     def save(self, commit=True):
         # Create or get the SensorType
@@ -65,6 +56,7 @@ class SensorWithTypeForm(forms.ModelForm):
         # Create Sensor with the SensorType found or created
         sensor = super(SensorWithTypeForm, self).save(commit=False)
         sensor.type = sensor_type
+        sensor.device = self.device  # Associate the sensor with the device
 
         if commit:
             sensor.save()

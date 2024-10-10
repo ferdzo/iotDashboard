@@ -23,6 +23,7 @@
         <form method="post">
             {% csrf_token %}
             {{ form.as_p }} <!-- Renders the inputs for all fields you added in your form -->
+            <input type="hidden" name="device_id" value="{{ device.id }}"> <!-- Hidden field for device ID -->
             <button type="submit" class="btn btn-success">Save</button>
             <a href="{% url 'device_list' %}" class="btn btn-secondary">Cancel</a>
         </form>

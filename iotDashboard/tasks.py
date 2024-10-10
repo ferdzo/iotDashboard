@@ -11,6 +11,7 @@ from .models import Device, Sensor, SensorType
 # Initialize Redis client
 redis_client = redis.StrictRedis(host='10.10.0.1', port=6379, db=0)
 
+
 def devices_to_redis():
     """Fetch devices and their sensors' topics from Django and store them in Redis."""
     devices = Device.objects.all()
@@ -25,6 +26,7 @@ def devices_to_redis():
             devices_list.append(sensor_data)
     redis_client.set('mqtt_devices', json.dumps(devices_list))
     print("Devices with sensors stored in Redis.")
+
 
 def fetch_data_http(device, sensor):
     """Fetch data from an HTTP sensor."""
@@ -46,6 +48,7 @@ def fetch_data_http(device, sensor):
     except requests.RequestException as e:
         print(f"HTTP request failed for {device.name}: {e}")
     return None
+
 
 def fetch_data_mqtt(device, sensor):
     """Fetch data from Redis for a specific MQTT device and sensor."""
@@ -70,9 +73,10 @@ def fetch_data_mqtt(device, sensor):
 
 
 def is_recent_data(timestamp):
-    """Check if data is within a 2-minute freshness window."""
+    """Check if data is within a 1-minute freshness window."""
     data_time = datetime.datetime.fromisoformat(timestamp)
-    return data_time > datetime.datetime.utcnow() - datetime.timedelta(minutes=2)
+    return data_time > datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
+
 
 def insert_data(data, sensor_type):
     """Insert parsed data into the PostgreSQL database."""
@@ -105,7 +109,8 @@ def insert_data(data, sensor_type):
     except Exception as e:
         print(f"Failed to insert data: {e}")
 
-@periodi    c_task(crontab(minute='*/1'))
+
+@periodic_task(crontab(minute='*/1'))
 def fetch_data_from_all_devices():
     """Fetch and insert data for all devices based on their protocol."""
     devices = Device.objects.all()
@@ -122,6 +127,7 @@ def fetch_data_from_all_devices():
                 insert_data(data, sensor.type.name)
             else:
                 print(f"No recent or valid data for {device.name}. Skipping.")
+
 
 @periodic_task(crontab(minute='*/5'))
 def last_5_minutes():
@@ -150,6 +156,7 @@ def last_5_minutes():
                 print("Last 5 readings:", data)
     except Exception as e:
         print(f"Error fetching or storing the last 5 readings: {e}")
+
 
 # Initialize device data in Redis
 devices_to_redis()
