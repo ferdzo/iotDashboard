@@ -1,282 +1,271 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IoT Dashboard</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <title>Conditions Chart with Chart.js</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datetimepicker/4.17.47/css/bootstrap-datetimepicker.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datetimepicker/4.17.47/js/bootstrap-datetimepicker.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/raphael/2.3.0/raphael.min.js"></script> <!-- Include Raphael.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/justgage/1.4.0/justgage.min.js"></script> <!-- Include JustGage.js -->
     <style>
-        .navbar {
-            margin-bottom: 20px;
-        }
-        .sensor-card {
-            margin-top: 20px;
-        }
-        .gpt-section {
-            margin-top: 20px;
-            background-color: #f8f9fa;
-            padding: 20px;
-            border-radius: 10px;
-        }
         .chart-container {
             position: relative;
-            height: 300px;
-            margin-bottom: 20px; /* Space between charts */
-        }
-        .footer {
-            margin-top: 40px;
+            width: 100%;
+            height: 400px;
+            background-color: #f9f9f9;
             padding: 20px;
-            background-color: #343a40;
-            color: white;
-            text-align: center;
+            border-radius: 10px;
+            box-shadow: 0px 0px 20px rgba(0, 0, 0, 0.1);
         }
-        .date-picker {
+
+        #conditionsChart {
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        .current-conditions {
+            text-align: center;
+            padding: 20px;
             margin-bottom: 20px;
+            background-color: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0px 0px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .current-conditions h2 {
+            font-size: 36px;
+            margin: 10px 0;
+        }
+
+        .current-conditions .value {
+            font-size: 48px;
+            font-weight: bold;
+            margin-bottom: 10px;
         }
     </style>
 </head>
-<body>
 
-<!-- Navigation Bar -->
-<nav class="navbar navbar-expand-lg navbar-light bg-light">
-    <a class="navbar-brand" href="{% url 'index' %}">IoT Dashboard</a>
-    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-        <span class="navbar-toggler-icon"></span>
-    </button>
-    <div class="collapse navbar-collapse" id="navbarNav">
-        <ul class="navbar-nav ml-auto">
-            <li class="nav-item"><a class="nav-link" href="{% url 'device_list' %}">Devices</a></li>
-            <li class="nav-item"><a class="nav-link" href="{% url 'add_sensor_with_type' %}">Sensors</a></li>
-            <li class="nav-item"><a class="nav-link" href="/admin/">Logout</a></li>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">IoT Dashboard</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'index' %}">Chart</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'device_list' %}">Devices</a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav">
+                    {% if user.is_authenticated %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="/admin">Logout</a>
+                        </li>
+                    {% else %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="/admin">Login</a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-5">
+        <div class="current-conditions">
+             <h4>GPT Data:</h4>
+    <p id="gptSummary">{{ gpt.summary }}</p>
+    <div id="gptRecommendations">
+        <h5>Recommendations:</h5>
+        <ul>
+            {% for sensor_type, value in gpt.recommendations.items %}
+                <h6>{{ sensor_type }}: {{ value }}</h6>
+            {% endfor %}
         </ul>
     </div>
-</nav>
-
-<!-- Page Title -->
-<div class="container text-center">
-    <h2>GPT Summary from All the Environment's Sensors</h2>
-</div>
-
-<!-- GPT Recommendations Section -->
-<div class="container gpt-section">
-    <div class="row">
-        <div class="col-md-8">
-            <h5>Modular Sensor Graphs with Current Parameters</h5>
-
-            <!-- Date Pickers for selecting start and end dates -->
-            <div class="row date-picker">
-                <div class="col-md-5">
-                    <label for="startDate">Start Date and Time:</label>
-                    <input type="text" id="startDate" class="form-control datetimepicker-input" data-toggle="datetimepicker" data-target="#startDate"/>
-                </div>
-                <div class="col-md-5">
-                    <label for="endDate">End Date and Time:</label>
-                    <input type="text" id="endDate" class="form-control datetimepicker-input" data-toggle="datetimepicker" data-target="#endDate"/>
-                </div>
-                <div class="col-md-2">
-                    <label>&nbsp;</label>
-                    <button id="applyDateRange" class="btn btn-primary btn-block">Apply</button>
-                </div>
-            </div>
-
-            <!-- Sensor Chart -->
-            <div id="sensor-charts" class="chart-container">
-                <canvas id="sensorChart"></canvas>
-            </div>
-
-            <!-- Button to add a new chart -->
-            <button id="addChartBtn" class="btn btn-success">Add New Chart</button>
         </div>
-        <div class="col-md-4">
-            <h5>GPT Recommendations for Parameters</h5>
-            <p id="gpt-summary"></p>
-        </div>
-    </div>
-</div>
 
-<!-- Device Cards Section -->
-<div class="container sensor-card">
-    <div class="row" id="device-list">
-        <!-- Device cards will be dynamically inserted here -->
-    </div>
-</div>
+        <!-- Device Selector Dropdown -->
+        <div class="row mb-4">
+            <div class="col-md-4 offset-md-4">
+                <select id="deviceSelector" class="form-select" onchange="updateSensorOptions()">
+                    <option value="">-- Select a Device --</option>
+                    <script>
+                        const devices = JSON.parse('{{ devices_json|escapejs }}');
 
-<!-- Footer -->
-<div class="footer">
-    <p>&copy; 2024 IoT Dashboard. All rights reserved.</p>
-</div>
+                        const deviceSelector = document.getElementById('deviceSelector');
+                        const sensorSelector = document.getElementById('sensorSelector');
 
-<script>
-    $(document).ready(function() {
-        // Initialize the date pickers
-        $('#startDate').datetimepicker({ format: 'YYYY-MM-DD HH:mm:ss' });
-        $('#endDate').datetimepicker({ format: 'YYYY-MM-DD HH:mm:ss' });
-
-        // Load device cards
-        var devices = JSON.parse('{{ devices_json | safe }}');
-        devices.forEach(device => {
-            $('#device-list').append(`
-                <div class="col-md-4">
-                    <div class="card">
-                        <div class="card-body">
-                            <h5 class="card-title">${device.name}</h5>
-                            <p class="card-text">Sensor Type: ${device.sensors__type__name}</p>
-                        </div>
-                    </div>
-                </div>
-            `);
-        });
-
-        // GPT Summary
-        var gptData = {{ gpt | safe }};  // Assuming the GPT data is passed from the server
-        $('#gpt-summary').text(gptData.summary);
-
-        // Update recommendations
-        function updateRecommendations() {
-            const recommendations = gptData.recommendations;
-            Object.keys(recommendations).forEach(key => {
-                $('#gpt-summary').append(`<br>${key}: ${recommendations[key]}`);
-            });
-        }
-        updateRecommendations();
-
-        // Fetch sensor data and update the chart dynamically
-        function updateChart(deviceName, startDate, endDate) {
-            $.ajax({
-                url: "{% url 'fetch_device_data' %}",
-                data: {
-                    device: deviceName,
-                    start_date: startDate,
-                    end_date: endDate
-                },
-                success: function(response) {
-                    // Clear any existing chart data
-                    sensorChart.data.labels = [];
-                    sensorChart.data.datasets = [];
-
-                    // Loop through the response to extract times and values for each metric
-                    for (var metric in response) {
-                        sensorChart.data.labels = response[metric].times;
-                        sensorChart.data.datasets.push({
-                            label: metric,
-                            data: response[metric].values,
-                            borderColor: 'rgba(75, 192, 192, 1)',
-                            fill: false
+                        // Populate device selector
+                        devices.forEach(device => {
+                            const option = document.createElement('option');
+                            option.value = device.name; // Device name used for identification
+                            option.textContent = device.name;
+                            deviceSelector.appendChild(option);
                         });
-                    }
+                    </script>
+                </select>
+            </div>
+        </div>
 
-                    // Update the chart with the new data
-                    sensorChart.update();
-                },
-                error: function(xhr, status, error) {
-                    console.error("Failed to fetch sensor data:", error);
-                }
-            });
+        <!-- Sensor Selector Dropdown -->
+        <div class="row mb-4">
+            <div class="col-md-4 offset-md-4">
+                <select id="sensorSelector" class="form-select">
+                    <option value="">-- Select a Sensor --</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Date Pickers for Time Window -->
+        <div class="row mb-4">
+            <div class="col-md-6 offset-md-3 d-flex justify-content-between">
+                <div>
+                    <label for="startDate" class="form-label">Start Date:</label>
+                    <input type="datetime-local" id="startDate" class="form-control">
+                </div>
+                <div>
+                    <label for="endDate" class="form-label">End Date:</label>
+                    <input type="datetime-local" id="endDate" class="form-control">
+                </div>
+            </div>
+        </div>
+
+        <!-- Fetch Button -->
+        <div class="row mb-4">
+            <div class="col-md-4 offset-md-4 text-center">
+                <button class="btn btn-primary" onclick="fetchDeviceData()">Fetch Data</button>
+            </div>
+        </div>
+
+        <!-- Chart Container -->
+        <div class="row">
+            <div class="col-md-8 offset-md-2">
+                <div class="chart-container">
+                    <canvas id="conditionsChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var ctx = document.getElementById('conditionsChart').getContext('2d');
+        var conditionsChart;
+
+        function updateSensorOptions() {
+            const selectedDeviceName = document.getElementById('deviceSelector').value;
+
+            // Find the selected device in the devices array
+            const selectedDevice = devices.find(device => device.name === selectedDeviceName);
+
+            // Clear the existing options in the sensorSelector
+            const sensorSelector = document.getElementById('sensorSelector');
+            sensorSelector.innerHTML = '<option value="">-- Select a Sensor --</option>';
+
+            if (selectedDevice) {
+                // Populate the sensor selector with the sensors for the selected device
+                selectedDevice.sensors.forEach(sensor => {
+                    const option = document.createElement('option');
+                    option.value = sensor.id;  // Set the sensor ID as the value
+                    option.textContent = sensor.type; // Set the sensor type as the display text
+                    sensorSelector.appendChild(option);
+                });
+            }
         }
 
-        // Initialize Chart.js with empty data
-        var ctx = document.getElementById('sensorChart').getContext('2d');
-        var sensorChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: [], // Labels will be dynamically loaded
-                datasets: [] // Datasets will be dynamically loaded
-            },
-            options: {
-                responsive: true,
-                title: {
-                    display: true,
-                    text: 'Sensor Data Over Time'
-                },
-                scales: {
-                    x: {
-                        display: true,
-                        title: {
-                            display: true,
-                            text: 'Time'
-                        }
-                    },
-                    y: {
-                        display: true,
-                        title: {
-                            display: true,
-                            text: 'Value'
-                        }
-                    }
-                }
+function fetchDeviceData() {
+    var device = document.getElementById('deviceSelector').value;
+    var sensor = document.getElementById('sensorSelector').value; // Get selected sensor
+    var startDate = document.getElementById('startDate').value;
+    var endDate = document.getElementById('endDate').value;
+
+    if (!device || !sensor) {
+        alert("Please select both a device and a sensor.");
+        return;
+    }
+
+    fetch(`/fetch_device_data/?device=${device}&sensor=${sensor}&start_date=${startDate}&end_date=${endDate}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error("Network response was not ok: " + response.statusText);
             }
-        });
+            return response.json();
+        })
+        .then(data => {
+            console.log("Fetched Data:", data); // Debugging point to check data structure
+            if (!data.times || !data.values) {
+                throw new Error("Invalid data format: Missing 'times' or 'values'");
+            }
 
-        // Function to apply date range and fetch new data
-        $('#applyDateRange').click(function() {
-            var startDate = $('#startDate').val();
-            var endDate = $('#endDate').val();
-            var deviceName = 'Livingroom'; // Default device for now, update this as needed
+            if (conditionsChart) {
+                conditionsChart.destroy(); // Destroy the old chart
+            }
 
-            // Call the updateChart function with the selected dates
-            updateChart(deviceName, startDate, endDate);
-        });
-
-        // Fetch initial data for default device
-        updateChart('Livingroom', null, null);
-
-        // Function to dynamically add a new chart
-        $('#addChartBtn').click(function() {
-            var newChartId = 'chart' + Date.now();  // Unique ID for each chart
-            addNewChart(newChartId, {
-                labels: ['Jan', 'Feb', 'Mar', 'Apr'],
-                datasets: [{
-                    label: 'New Sensor Data',
-                    data: [30, 60, 90, 120],
-                    borderColor: 'rgba(75, 192, 192, 1)',
-                    fill: false
-                }]
-            });
-        });
-
-        // Function to dynamically add a new chart
-        function addNewChart(chartId, chartData) {
-            var canvas = document.createElement('canvas');
-            canvas.id = chartId;
-            document.getElementById('sensor-charts').appendChild(canvas);
-
-            var ctx = document.getElementById(chartId).getContext('2d');
-            new Chart(ctx, {
+            conditionsChart = new Chart(ctx, {
                 type: 'line',
-                data: chartData,
+                data: {
+                    labels: data.times,
+                    datasets: [
+                        {
+                            label: `${sensor} (°C or %)`,
+                            data: data.values,
+                            borderColor: sensor === 'Temperature' ? 'red' : 'blue',
+                            fill: false,
+                        }
+                    ]
+                },
                 options: {
                     responsive: true,
-                    title: {
-                        display: true,
-                        text: 'Dynamic Sensor Data Over Time'
-                    },
+                    maintainAspectRatio: false,
                     scales: {
                         x: {
-                            display: true,
                             title: {
                                 display: true,
                                 text: 'Time'
+                            },
+                            ticks: {
+                                autoSkip: true,
+                                maxRotation: 45,
+                                minRotation: 45,
                             }
                         },
                         y: {
-                            display: true,
                             title: {
                                 display: true,
-                                text: 'Value'
+                                text: 'Values'
+                            },
+                            beginAtZero: true
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                boxWidth: 20,
+                                padding: 20,
                             }
+                        },
+                        tooltip: {
+                            enabled: true,
                         }
                     }
                 }
             });
-        }
-    });
-</script>
+        })
+        .catch(error => {
+            console.error("Error fetching data:", error);
+            alert("An error occurred while fetching data. Please try again.");
+        });
+}
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
+
 </html>

@@ -1,7 +1,4 @@
-import json
-
 import redis
-from django.core.serializers.json import DjangoJSONEncoder
 from django.db import connections
 from django.http import JsonResponse, HttpResponse
 from django.shortcuts import render, redirect, get_object_or_404
@@ -13,20 +10,39 @@ redis_client = redis.StrictRedis(host='10.10.0.1', port=6379, db=0)
 
 
 def fetch_gpt_data():
-    return redis_client.get("gpt").decode("utf-8").strip('b"').replace('\\"', '"').replace("\\n", "").replace("\\", "")
+    return redis_client.get("gpt").decode("utf-8").strip('b"').replace('\\"', '"').replace("\\n", "").replace("\\","").replace("\\u00b0", "°")
+
+
+import json  # Add this at the top of the file if not already present
 
 
 def chart(request):
     # Fetch devices and their related sensors
-    devices = list(Device.objects.all().values('name', 'sensors__type__name'))
+    devices = Device.objects.prefetch_related('sensors__type').all()  # Prefetch related sensors and their types
 
-    # Serialize data to JSON format
-    devices_json = json.dumps(devices, cls=DjangoJSONEncoder)
+    # Create a list of devices and associated sensors
+    devices_json = [
+        {
+            "name": device.name,
+            "sensors": [{"id": sensor.id, "type": sensor.type.name} for sensor in device.sensors.all()]
+        }
+        for device in devices
+    ]
 
-    # Pass devices data to the context
-    gpt = fetch_gpt_data()
-    gpt = json.loads(gpt)
-    context = {'devices_json': devices_json, 'gpt': gpt}
+    try:
+        # Fetch GPT data from Redis and parse it
+        gpt_data = fetch_gpt_data()
+        gpt = json.loads(gpt_data)
+    except (redis.RedisError, json.JSONDecodeError) as e:
+        # Handle errors if fetching GPT data or JSON parsing fails
+        gpt = {"summary": "Error fetching data", "recommendations": {}}
+        print(f"Error fetching or parsing GPT data: {e}")
+
+    # Serialize devices_json to JSON string for use in the template
+    context = {
+        'devices_json': json.dumps(devices_json),  # Convert to a JSON string
+        'gpt': gpt
+    }
 
     return render(request, 'chart.html', context)
 
@@ -91,11 +107,13 @@ def chart(request):
 
 def fetch_device_data(request):
     device_name = request.GET.get('device', 'Livingroom')
-    sensor_name = request.GET.get('sensor')  # Optional parameter for a specific sensor
+    sensor_name = request.GET.get('sensor')  # This will be the actual sensor name
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
 
     # Log the parameters to ensure they are correct
+    sensor_name = Sensor.objects.get(id=sensor_name).type.name
+
     print("Device Name:", device_name)
     print("Sensor Name:", sensor_name)  # Log sensor name
     print("Start Date:", start_date)
@@ -104,8 +122,9 @@ def fetch_device_data(request):
     # Get the specific device by name
     device = get_object_or_404(Device, name=device_name)
 
-    # Initialize the results dictionary to store sensor data
-    results = {}
+    # Initialize lists to store times and values
+    times = []
+    values = []
 
     # Prepare SQL query and parameters for the device
     query = """
@@ -115,10 +134,10 @@ def fetch_device_data(request):
     """
     params = [device.name]
 
-    # If a specific sensor is specified, filter by that sensor
+    # If a specific sensor is specified, filter by that sensor name (converted to lowercase)
     if sensor_name:
-        query += " AND metric = %s"
-        params.append(sensor_name)
+        query += " AND metric = LOWER(%s)"  # Convert to lowercase for comparison
+        params.append(sensor_name.lower())  # Convert sensor name to lowercase
 
     # Add time filtering to the query
     if start_date:
@@ -138,20 +157,24 @@ def fetch_device_data(request):
         cursor.execute(query, params)
         rows = cursor.fetchall()
 
-    # Process the results and group them by sensor type (metric)
+    # Log the number of rows returned
+    print("Number of Rows Returned:", len(rows))
+
+    # Process the results and extract times and values
     for row in rows:
         time, metric, value = row
         formatted_time = time.strftime('%Y-%m-%d %H:%M:%S')
 
-        if metric not in results:
-            results[metric] = {
-                'times': [],
-                'values': []
-            }
-        results[metric]['times'].append(formatted_time)
-        results[metric]['values'].append(value)
+        times.append(formatted_time)
+        values.append(value)
 
-    return JsonResponse(results)
+    # If no data is found, return empty arrays
+    if not times and not values:
+        print("No data found for the specified device and sensor.")
+        return JsonResponse({'times': [], 'values': []})
+
+    # Return the response in the expected format
+    return JsonResponse({'times': times, 'values': values})
 
 
 def index(request):
