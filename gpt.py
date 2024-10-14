@@ -1,5 +1,5 @@
 import json
-
+import os
 import redis
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -7,7 +7,8 @@ from openai import OpenAI
 load_dotenv()
 client = OpenAI()
 
-redis_client = redis.StrictRedis(host='10.10.0.1', port=6379, db=0)
+REDIS_HOST=os.getenv('REDIS_HOST')
+redis_client = redis.StrictRedis(host=REDIS_HOST, port=6379, db=0)
 
 data = redis_client.get("last5").decode("utf-8")
 

@@ -1,15 +1,29 @@
 import json
 import datetime
+import os
 import requests
 import psycopg2
 import redis
 from django.conf import settings
 from huey import crontab
 from huey.contrib.djhuey import periodic_task
-from .models import Device, Sensor, SensorType
+from .models import Device
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Initialize Redis client
-redis_client = redis.StrictRedis(host='10.10.0.1', port=6379, db=0)
+REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')  # Default to localhost if not set
+try:
+    redis_client = redis.StrictRedis(host=REDIS_HOST, port=6379, db=0)
+    print(redis_client)
+    redis_client.ping()
+    print('Connected!')
+except Exception as ex:
+    print
+    'Error:', ex
+    exit('Failed to connect, terminating.')
+
 
 
 def devices_to_redis():
@@ -50,25 +64,27 @@ def fetch_data_http(device, sensor):
     return None
 
 
-def fetch_data_mqtt(device, sensor):
-    """Fetch data from Redis for a specific MQTT device and sensor."""
-    # Get the data for the specific device from Redis
-    data = redis_client.get(device.name)  # Assumes device.name is the Redis key
-    if data:
-        data = json.loads(data.decode('utf-8'))
+def fetch_data_mqtt_stream(device, sensor):
+    """Fetch data from Redis Stream for a specific MQTT device and sensor."""
+    sensor_name = sensor.type.name.lower()
+    stream_key = f"mqtt_stream:{device.name}:{sensor_name}"  # Key format for the stream
+    try:
+        # Read from the Redis stream, waiting for new data with blocking if necessary
+        stream_data = redis_client.xread({stream_key: '0-0'}, block=1000, count=1)
+        if stream_data:
+            _, entries = stream_data[0]  # Get the entries from the stream
+            for entry_id, entry_data in entries:
+                sensor_value = entry_data.get(b'value')
+                timestamp = entry_data.get(b'time')
 
-        # Normalize the sensor name to lowercase for lookup
-        sensor_name = sensor.type.name.lower()
-        sensor_value = data['sensors'].get(sensor_name)
-
-        if sensor_value is not None and is_recent_data(data['time']):
-            return {
-                "time": data['time'],
-                "device": device.name,
-                "sensor_value": sensor_value
-            }
-
-    print(data)
+                if sensor_value and timestamp:
+                    return {
+                        "time": timestamp.decode('utf-8'),
+                        "device": device.name,
+                        "sensor_value": float(sensor_value.decode('utf-8'))
+                    }
+    except Exception as e:
+        print(f"Error fetching data from stream {stream_key}: {e}")
     return None
 
 
@@ -121,7 +137,7 @@ def fetch_data_from_all_devices():
             if device.protocol == 'http':
                 data = fetch_data_http(device, sensor)
             elif device.protocol == 'mqtt':
-                data = fetch_data_mqtt(device, sensor)
+                data = fetch_data_mqtt_stream(device, sensor)
 
             if data and is_recent_data(data['time']):
                 insert_data(data, sensor.type.name)

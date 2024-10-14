@@ -10,12 +10,20 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Set up Redis client
-REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
-redis_client = redis.StrictRedis(host=REDIS_HOST, port=6379, db=0)
-print("Connected to Redis Server")
+REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')  # Default to localhost if not set
+try:
+    redis_client = redis.StrictRedis(host=REDIS_HOST, port=6379, db=0)
+    print(redis_client)
+    redis_client.ping()
+    print('Connected!')
+except Exception as ex:
+    print
+    'Error:', ex
+    exit('Failed to connect, terminating.')
+
 
 # MQTT broker address
-MQTT_BROKER = os.getenv('MQTT_BROKER')
+MQTT_BROKER = os.getenv('MQTT_BROKER', 'localhost')  # Default to localhost if not set
 mqtt_data = {}
 
 
@@ -30,8 +38,17 @@ def get_mqtt_devices():
 def build_device_map():
     """Build a mapping of device endpoints to friendly names."""
     devices = get_mqtt_devices()
-    return {device['topic'].split('/')[0]: device['device_name'] for device in
-            devices}  # Assuming topic starts with device name
+    return {device['topic'].split('/')[0]: device['device_name'] for device in devices}  # Assuming topic starts with
+    # device name
+
+
+def publish_to_stream(stream_name, data):
+    """Append a message to Redis Stream."""
+    try:
+        redis_client.xadd(stream_name, data)
+        print(f"Published to Redis Stream '{stream_name}': {data}")
+    except redis.RedisError as e:
+        print(f"Error writing to Redis Stream: {e}")
 
 
 def on_message(client, userdata, msg):
@@ -49,6 +66,7 @@ def on_message(client, userdata, msg):
         device_map = build_device_map()
         device_name = device_map.get(device_endpoint, device_endpoint)  # Fallback to endpoint if not found
 
+        # Initialize device data if it's the first sensor reading
         if device_name not in mqtt_data:
             mqtt_data[device_name] = {
                 "time": datetime.utcnow().isoformat(),
@@ -60,8 +78,8 @@ def on_message(client, userdata, msg):
         mqtt_data[device_name]["sensors"][sensor_type] = sensor_value
         mqtt_data[device_name]["time"] = datetime.utcnow().isoformat()
 
-        # Store the updated data structure in Redis
-        redis_client.set(device_name, json.dumps(mqtt_data[device_name]))
+        # Publish to Redis Stream (adjust as needed to reflect the correct stream name)
+        publish_to_stream(device_name, mqtt_data[device_name])
         print(f"Updated data for {device_name}: {mqtt_data[device_name]}")
 
     except ValueError as e:

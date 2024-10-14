@@ -5,7 +5,7 @@ from django.http import JsonResponse, HttpResponse
 from django.shortcuts import render, redirect, get_object_or_404
 
 from .forms import DeviceForm, SensorWithTypeForm
-from .models import Device, Sensor
+from iotDashboard.models import Device, Sensor
 
 redis_client = redis.StrictRedis(host='10.10.0.1', port=6379, db=0)
 

@@ -1,5 +1,5 @@
 from django import forms
-from .models import Device, Sensor, SensorType
+from iotDashboard.models import Device, Sensor, SensorType
 
 
 class DeviceForm(forms.ModelForm):
