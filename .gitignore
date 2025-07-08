@@ -6,5 +6,5 @@ demo.db
 demo.db-shm
 demo.db-wal
 /iotDashboard/demo1.db
-/__pycache__/
+**/__pycache__/
 iotDashboard/db_create.py

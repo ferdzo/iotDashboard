@@ -12,7 +12,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Initialize Redis client
 REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')  # Default to localhost if not set
 try:
     redis_client = redis.StrictRedis(host=REDIS_HOST, port=6379, db=0)
@@ -46,10 +45,9 @@ def fetch_data_http(device, sensor):
     """Fetch data from an HTTP sensor."""
     sensor_type_name = sensor.type.name.lower()
     try:
-        # Make the request to the device's HTTP endpoint
         response = requests.get(f"http://{device.ip}/sensor/{sensor_type_name}", timeout=5)
-        response.raise_for_status()  # Raise an exception for any non-200 status codes
-        sensor_value = response.json().get('value')  # Assuming the JSON response structure
+        response.raise_for_status()
+        sensor_value = response.json().get('value')
         if sensor_value is not None:
             return {
                 "time": datetime.datetime.utcnow().isoformat(),
@@ -67,12 +65,11 @@ def fetch_data_http(device, sensor):
 def fetch_data_mqtt_stream(device, sensor):
     """Fetch data from Redis Stream for a specific MQTT device and sensor."""
     sensor_name = sensor.type.name.lower()
-    stream_key = f"mqtt_stream:{device.name}:{sensor_name}"  # Key format for the stream
+    stream_key = f"mqtt_stream:{device.name}:{sensor_name}"
     try:
-        # Read from the Redis stream, waiting for new data with blocking if necessary
         stream_data = redis_client.xread({stream_key: '0-0'}, block=1000, count=1)
         if stream_data:
-            _, entries = stream_data[0]  # Get the entries from the stream
+            _, entries = stream_data[0]
             for entry_id, entry_data in entries:
                 sensor_value = entry_data.get(b'value')
                 timestamp = entry_data.get(b'time')
@@ -174,5 +171,4 @@ def last_5_minutes():
         print(f"Error fetching or storing the last 5 readings: {e}")
 
 
-# Initialize device data in Redis
 devices_to_redis()

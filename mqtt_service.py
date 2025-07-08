@@ -10,7 +10,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Set up Redis client
-REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')  # Default to localhost if not set
+REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
+
+MQTT_PASS=os.getenv("MQTT_PASS")
+MQTT_USER=os.getenv("MQTT_USER")
 try:
     redis_client = redis.StrictRedis(host=REDIS_HOST, port=6379, db=0)
     print(redis_client)
@@ -22,8 +25,7 @@ except Exception as ex:
     exit('Failed to connect, terminating.')
 
 
-# MQTT broker address
-MQTT_BROKER = os.getenv('MQTT_BROKER', 'localhost')  # Default to localhost if not set
+MQTT_BROKER = os.getenv('MQTT_BROKER', 'localhost')
 mqtt_data = {}
 
 
@@ -38,8 +40,7 @@ def get_mqtt_devices():
 def build_device_map():
     """Build a mapping of device endpoints to friendly names."""
     devices = get_mqtt_devices()
-    return {device['topic'].split('/')[0]: device['device_name'] for device in devices}  # Assuming topic starts with
-    # device name
+    return {device['topic'].split('/')[0]: device['device_name'] for device in devices}
 
 
 def publish_to_stream(stream_name, data):
@@ -54,19 +55,16 @@ def publish_to_stream(stream_name, data):
 def on_message(client, userdata, msg):
     """Handle incoming messages from MQTT broker."""
     try:
-        # Parse the incoming message topic
         topic_parts = msg.topic.split('/')
-        device_endpoint = topic_parts[0]  # This is the actual endpoint name
-        sensor_type = topic_parts[2]  # Assuming sensor type is in the third part
+        device_endpoint = topic_parts[0]
+        sensor_type = topic_parts[2]
 
         sensor_value = float(msg.payload.decode())
         print(f"Received message from {device_endpoint}, sensor {sensor_type}: {sensor_value}")
 
-        # Build the device map to get the friendly device name
         device_map = build_device_map()
-        device_name = device_map.get(device_endpoint, device_endpoint)  # Fallback to endpoint if not found
+        device_name = device_map.get(device_endpoint, device_endpoint)
 
-        # Initialize device data if it's the first sensor reading
         if device_name not in mqtt_data:
             mqtt_data[device_name] = {
                 "time": datetime.utcnow().isoformat(),
@@ -74,11 +72,9 @@ def on_message(client, userdata, msg):
                 "sensors": {}
             }
 
-        # Update the sensor value in the mqtt_data dictionary
         mqtt_data[device_name]["sensors"][sensor_type] = sensor_value
         mqtt_data[device_name]["time"] = datetime.utcnow().isoformat()
 
-        # Publish to Redis Stream (adjust as needed to reflect the correct stream name)
         publish_to_stream(device_name, mqtt_data[device_name])
         print(f"Updated data for {device_name}: {mqtt_data[device_name]}")
 
@@ -109,6 +105,7 @@ def start_mqtt_client():
     client.on_connect = on_connect
     client.on_disconnect = on_disconnect
     client.on_message = on_message
+    client.username_pw_set(MQTT_USER,MQTT_PASS)
     client.connect(MQTT_BROKER)
 
     client.loop_start()
@@ -116,7 +113,7 @@ def start_mqtt_client():
 
     try:
         while True:
-            time.sleep(10)  # Sleep to prevent high CPU usage
+            time.sleep(10)
     except KeyboardInterrupt:
         print("Script interrupted by user")
     finally:

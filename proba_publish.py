@@ -24,7 +24,6 @@ def publish_to_stream(stream_name, data):
 
 
 if __name__ == "__main__":
-    # Example sensor data to publish
     mqtt_data = {
         "time": datetime.utcnow().isoformat(),
         "device": "Livingroom",
@@ -32,6 +31,5 @@ if __name__ == "__main__":
         "value": 25.6
     }
 
-    # Publish to the stream
     publish_to_stream(STREAM_NAME, mqtt_data)
 
