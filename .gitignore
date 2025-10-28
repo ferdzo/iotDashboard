@@ -8,3 +8,4 @@ demo.db-wal
 /iotDashboard/demo1.db
 **/__pycache__/
 iotDashboard/db_create.py
+.venv/

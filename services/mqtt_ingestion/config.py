@@ -18,7 +18,8 @@ class MQTTConfig:
     port: int = 1883
     username: Optional[str] = None
     password: Optional[str] = None
-    topic: str = "#"
+    topic_pattern: str = "devices/#"
+    keepalive: int = 60
 
 @dataclass
 class Payload:
@@ -40,8 +41,9 @@ class Config:
             broker=os.getenv('MQTT_BROKER', 'localhost'),
             port=int(os.getenv('MQTT_PORT', 1883)),
             username=os.getenv('MQTT_USERNAME', None),
-            password=None,
-            topic="#"
+            password=os.getenv('MQTT_PASSWORD', None),
+            topic_pattern=os.getenv('MQTT_TOPIC_PATTERN', 'devices/#'),
+            keepalive=int(os.getenv('MQTT_KEEPALIVE', 60))
         )
 
 config = Config()

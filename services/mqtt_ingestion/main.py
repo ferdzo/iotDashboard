@@ -1,11 +1,9 @@
 import logging
 import signal
 import sys
-from config import config
 from mqtt_client import MQTTClient
 from redis_writer import RedisWriter
 
-# Setup logging
 logging.basicConfig(
     level=getattr(logging,'INFO'),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -18,7 +16,6 @@ class MQTTIngestionService:
         self.redis_writer = None
         self.mqtt_client = None
         
-        # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGTERM, self._signal_handler)
         signal.signal(signal.SIGINT, self._signal_handler)
     
@@ -43,13 +40,10 @@ class MQTTIngestionService:
         logger.info("Starting MQTT Ingestion Service...")
         
         try:
-            # Initialize Redis writer
             self.redis_writer = RedisWriter()
             
-            # Initialize MQTT client with our message handler
             self.mqtt_client = MQTTClient(self._handle_sensor_data)
             
-            # Connect to MQTT
             if not self.mqtt_client.connect():
                 logger.error("Failed to connect to MQTT, exiting")
                 return False
@@ -57,7 +51,6 @@ class MQTTIngestionService:
             self.running = True
             logger.info("Service started successfully")
             
-            # Start MQTT loop (this blocks)
             self.mqtt_client.start_loop()
             
         except Exception as e:
@@ -74,11 +67,9 @@ class MQTTIngestionService:
         logger.info("Stopping service...")
         self.running = False
         
-        # Stop MQTT client
         if self.mqtt_client:
             self.mqtt_client.stop()
         
-        # Close Redis connection
         if self.redis_writer:
             self.redis_writer.close()
         
@@ -89,7 +80,6 @@ class MQTTIngestionService:
         if not self.running:
             return False
             
-        # Check Redis connection
         if not self.redis_writer or not self.redis_writer.health_check():
             return False
             
@@ -97,13 +87,9 @@ class MQTTIngestionService:
 
 def main():
     """Entry point"""
-    service = MQTTIngestionService(
-        redis_config=config.redis,
-        mqtt_config=config.mqtt
-    )
+    service = MQTTIngestionService()
     
     try:
-        # Start the service (blocks until shutdown)
         success = service.start()
         if not success:
             sys.exit(1)

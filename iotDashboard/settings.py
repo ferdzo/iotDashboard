@@ -12,7 +12,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 from dotenv import load_dotenv
 from pathlib import Path
 import os
-from huey import SqliteHuey
+# from huey import SqliteHuey
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -46,7 +46,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'iotDashboard',
-    'huey.contrib.djhuey',
+    # 'huey.contrib.djhuey',
 
 ]
 
@@ -142,11 +142,11 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
-HUEY = {
-    'huey_class': 'huey.SqliteHuey',  # Or 'huey.RedisHuey' for Redis
-    'filename': 'demo.db',  # SQLite file for task storage
-    'results': True,
-    'store_none': False,
-    'immediate': False,
-    'utc': True,
-}
+# HUEY = {
+#     'huey_class': 'huey.SqliteHuey',  # Or 'huey.RedisHuey' for Redis
+#     'filename': 'demo.db',  # SQLite file for task storage
+#     'results': True,
+#     'store_none': False,
+#     'immediate': False,
+#     'utc': True,
+# }

@@ -20,7 +20,6 @@ class MQTTClient:
         self.client.on_message = self._on_message
         self.client.on_disconnect = self._on_disconnect
         
-        # Set credentials if provided
         if config.mqtt.username:
             self.client.username_pw_set(
                 config.mqtt.username, 
@@ -30,7 +29,6 @@ class MQTTClient:
     def _on_connect(self, client, userdata, flags, rc):
         if rc == 0:
             logger.info(f"Connected to MQTT broker {config.mqtt.broker}")
-            # Subscribe to all device topics: devices/+/+
             client.subscribe(config.mqtt.topic_pattern)
             logger.info(f"Subscribed to {config.mqtt.topic_pattern}")
         else:
@@ -38,7 +36,6 @@ class MQTTClient:
     
     def _on_message(self, client, userdata, msg):
         try:
-            # Parse topic: devices/{device_id}/{sensor_type}
             topic_parts = msg.topic.split('/')
             if len(topic_parts) != 3 or topic_parts[0] != 'devices':
                 logger.warning(f"Invalid topic format: {msg.topic}")
@@ -47,14 +44,12 @@ class MQTTClient:
             device_id = topic_parts[1]
             sensor_type = topic_parts[2]
             
-            # Parse payload as float
             try:
                 value = float(msg.payload.decode())
             except ValueError:
                 logger.error(f"Invalid payload for {msg.topic}: {msg.payload}")
                 return
             
-            # Call the handler (this will be our Redis writer)
             self.message_handler(device_id, sensor_type, value)
             
         except Exception as e:
