@@ -9,3 +9,7 @@ demo.db-wal
 **/__pycache__/
 iotDashboard/db_create.py
 .venv/
+.ruff_cache/
+*.key
+*.crt
+*.csr

@@ -12,17 +12,16 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')  # Default to localhost if not set
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")  # Default to localhost if not set
 try:
     redis_client = redis.StrictRedis(host=REDIS_HOST, port=6379, db=0)
     print(redis_client)
     redis_client.ping()
-    print('Connected!')
+    print("Connected!")
 except Exception as ex:
     print
-    'Error:', ex
-    exit('Failed to connect, terminating.')
-
+    "Error:", ex
+    exit("Failed to connect, terminating.")
 
 
 def devices_to_redis():
@@ -32,12 +31,12 @@ def devices_to_redis():
     for device in devices:
         for sensor in device.sensors.all():
             sensor_data = {
-                'device_name': device.name,
-                'sensor_name': sensor.type.name,
-                'topic': sensor.type.topic  # Assuming the topic is stored in SensorType
+                "device_name": device.name,
+                "sensor_name": sensor.type.name,
+                "topic": sensor.type.topic,  # Assuming the topic is stored in SensorType
             }
             devices_list.append(sensor_data)
-    redis_client.set('mqtt_devices', json.dumps(devices_list))
+    redis_client.set("mqtt_devices", json.dumps(devices_list))
     print("Devices with sensors stored in Redis.")
 
 
@@ -45,15 +44,17 @@ def fetch_data_http(device, sensor):
     """Fetch data from an HTTP sensor."""
     sensor_type_name = sensor.type.name.lower()
     try:
-        response = requests.get(f"http://{device.ip}/sensor/{sensor_type_name}", timeout=5)
+        response = requests.get(
+            f"http://{device.ip}/sensor/{sensor_type_name}", timeout=5
+        )
         response.raise_for_status()
-        sensor_value = response.json().get('value')
+        sensor_value = response.json().get("value")
         if sensor_value is not None:
             return {
                 "time": datetime.datetime.utcnow().isoformat(),
                 "device": device.name,
                 "sensor": sensor_type_name,
-                "sensor_value": sensor_value
+                "sensor_value": sensor_value,
             }
         else:
             print(f"No value returned from {device.name} for {sensor_type_name}")
@@ -67,18 +68,18 @@ def fetch_data_mqtt_stream(device, sensor):
     sensor_name = sensor.type.name.lower()
     stream_key = f"mqtt_stream:{device.name}:{sensor_name}"
     try:
-        stream_data = redis_client.xread({stream_key: '0-0'}, block=1000, count=1)
+        stream_data = redis_client.xread({stream_key: "0-0"}, block=1000, count=1)
         if stream_data:
             _, entries = stream_data[0]
             for entry_id, entry_data in entries:
-                sensor_value = entry_data.get(b'value')
-                timestamp = entry_data.get(b'time')
+                sensor_value = entry_data.get(b"value")
+                timestamp = entry_data.get(b"time")
 
                 if sensor_value and timestamp:
                     return {
-                        "time": timestamp.decode('utf-8'),
+                        "time": timestamp.decode("utf-8"),
                         "device": device.name,
-                        "sensor_value": float(sensor_value.decode('utf-8'))
+                        "sensor_value": float(sensor_value.decode("utf-8")),
                     }
     except Exception as e:
         print(f"Error fetching data from stream {stream_key}: {e}")
@@ -93,15 +94,15 @@ def is_recent_data(timestamp):
 
 def insert_data(data, sensor_type):
     """Insert parsed data into the PostgreSQL database."""
-    if 'sensor_value' not in data:
+    if "sensor_value" not in data:
         print(f"Missing 'sensor_value' in data: {data}. Skipping insertion.")
         return
 
     insert_data_dict = {
-        "time": data['time'],
-        "device": data['device'],
+        "time": data["time"],
+        "device": data["device"],
         "metric": sensor_type.lower(),
-        "value": data['sensor_value'],
+        "value": data["sensor_value"],
     }
 
     try:
@@ -111,19 +112,24 @@ def insert_data(data, sensor_type):
                 INSERT INTO sensor_readings (time, device_name, metric, value)
                 VALUES (%s, %s, %s, %s);
                 """
-                cursor.execute(insert_query, (
-                    insert_data_dict["time"],
-                    insert_data_dict["device"],
-                    insert_data_dict["metric"],
-                    insert_data_dict["value"]
-                ))
+                cursor.execute(
+                    insert_query,
+                    (
+                        insert_data_dict["time"],
+                        insert_data_dict["device"],
+                        insert_data_dict["metric"],
+                        insert_data_dict["value"],
+                    ),
+                )
             conn.commit()
-            print(f"Data inserted successfully for {insert_data_dict['device']}: {insert_data_dict}")
+            print(
+                f"Data inserted successfully for {insert_data_dict['device']}: {insert_data_dict}"
+            )
     except Exception as e:
         print(f"Failed to insert data: {e}")
 
 
-@periodic_task(crontab(minute='*/1'))
+@periodic_task(crontab(minute="*/1"))
 def fetch_data_from_all_devices():
     """Fetch and insert data for all devices based on their protocol."""
     devices = Device.objects.all()
@@ -131,18 +137,18 @@ def fetch_data_from_all_devices():
         for sensor in device.sensors.all():
             data = None
 
-            if device.protocol == 'http':
+            if device.protocol == "http":
                 data = fetch_data_http(device, sensor)
-            elif device.protocol == 'mqtt':
+            elif device.protocol == "mqtt":
                 data = fetch_data_mqtt_stream(device, sensor)
 
-            if data and is_recent_data(data['time']):
+            if data and is_recent_data(data["time"]):
                 insert_data(data, sensor.type.name)
             else:
                 print(f"No recent or valid data for {device.name}. Skipping.")
 
 
-@periodic_task(crontab(minute='*/5'))
+@periodic_task(crontab(minute="*/5"))
 def last_5_minutes():
     """Fetch the last 5 readings from TimescaleDB and store them in Redis."""
     try:
@@ -161,7 +167,7 @@ def last_5_minutes():
                         "time": reading[0].isoformat(),
                         "device": reading[1],
                         "metric": reading[2],
-                        "value": reading[3]
+                        "value": reading[3],
                     }
                     for reading in results
                 ]

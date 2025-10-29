@@ -9,7 +9,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 # Load environment variables
 from dotenv import load_dotenv
-load_dotenv(os.path.join(os.path.dirname(__file__), '../.env'))
+
+load_dotenv(os.path.join(os.path.dirname(__file__), "../.env"))
 
 # Import your models
 from models import Base
@@ -19,9 +20,9 @@ from models import Base
 config = context.config
 
 # Set database URL from environment
-database_url = os.getenv('CONNECTION_STRING') or os.getenv('DATABASE_URL')
+database_url = os.getenv("CONNECTION_STRING") or os.getenv("DATABASE_URL")
 if database_url:
-    config.set_main_option('sqlalchemy.url', database_url)
+    config.set_main_option("sqlalchemy.url", database_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
@@ -76,9 +77,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()
