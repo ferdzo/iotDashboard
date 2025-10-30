@@ -1,7 +1,7 @@
 import redis
 import logging
 from datetime import datetime
-from config import config
+from src.config import config
 
 logger = logging.getLogger(__name__)
 

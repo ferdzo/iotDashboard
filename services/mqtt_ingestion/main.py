@@ -1,8 +1,8 @@
 import logging
 import signal
 import sys
-from mqtt_client import MQTTClient
-from redis_writer import RedisWriter
+from src.mqtt_client import MQTTClient
+from src.redis_writer import RedisWriter
 
 logging.basicConfig(
     level=getattr(logging, "INFO"),

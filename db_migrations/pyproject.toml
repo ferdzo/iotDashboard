@@ -1,0 +1,10 @@
+[project]
+name = "db-migrations"
+version = "0.1.0"
+description = "DB migration scripts"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "alembic>=1.17.0",
+    "sqlalchemy>=2.0.44",
+]

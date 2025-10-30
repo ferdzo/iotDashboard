@@ -135,3 +135,8 @@ class CertificateManager:
             private_key_pem=credentials["private_key_pem"].decode("utf-8"),
             expires_at=credentials["expires_at"],
         )
+
+    def get_ca_certificate_pem(self) -> str:
+        """Get the CA certificate in PEM format as a string."""
+        return self.ca_cert_pem.decode("utf-8")
+

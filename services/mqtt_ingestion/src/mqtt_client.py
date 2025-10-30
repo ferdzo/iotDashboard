@@ -1,7 +1,7 @@
 import logging
 import paho.mqtt.client as mqtt
 from typing import Callable
-from config import config
+from src.config import config
 
 logger = logging.getLogger(__name__)
 

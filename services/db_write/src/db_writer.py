@@ -4,9 +4,8 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import QueuePool
 
-from config import config
-from schema import TelemetryReading
-from models import Telemetry
+from src.config import config
+from src.schema import TelemetryReading
 
 
 class DatabaseWriter:
@@ -40,7 +39,7 @@ class DatabaseWriter:
         try:
             # Convert to database objects using the correct field mapping
             db_objects = [
-                Telemetry(
+                TelemetryReading(
                     time=reading.time,
                     device_id=reading.device_id,
                     metric=reading.metric,

@@ -10,10 +10,10 @@ import time
 import structlog
 from typing import List
 
-from config import config
-from redis_reader import RedisReader
-from db_writer import DatabaseWriter
-from schema import SchemaHandler, StreamMessage, TelemetryReading
+from src.config import config
+from src.redis_reader import RedisReader
+from src.db_writer import DatabaseWriter
+from src.schema import SchemaHandler, StreamMessage, TelemetryReading
 
 
 def configure_logging():

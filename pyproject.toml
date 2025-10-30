@@ -19,3 +19,8 @@ dependencies = [
 dev = [
     "ruff>=0.14.2",
 ]
+
+[tool.uv.workspace]
+members = [
+    "db_migrations",
+]

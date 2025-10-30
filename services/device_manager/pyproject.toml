@@ -8,8 +8,10 @@ dependencies = [
     "cryptography>=46.0.3",
     "fastapi[standard]>=0.120.2",
     "nanoid>=2.0.0",
+    "psycopg2-binary>=2.9.11",
     "pydantic>=2.12.3",
     "python-dotenv>=1.2.1",
+    "sqlalchemy>=2.0.44",
     "uvicorn>=0.38.0",
 ]
 

@@ -1,8 +1,8 @@
 import redis
 import logging
 from typing import List, Optional, Dict
-from config import config
-from schema import SchemaHandler, StreamMessage
+from src.config import config
+from src.schema import SchemaHandler, StreamMessage
 
 
 class RedisReader:
