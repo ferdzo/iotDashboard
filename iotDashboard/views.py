@@ -1,25 +1,52 @@
 import redis
 import json
+import logging
+import os
 from django.db import connections
 from django.http import JsonResponse, HttpResponse
 from django.shortcuts import render, redirect, get_object_or_404
+from dotenv import load_dotenv
 
 from .forms import DeviceForm, SensorWithTypeForm
 from iotDashboard.models import Device, Sensor
 
-redis_client = redis.StrictRedis(host="10.10.0.1", port=6379, db=0)
+load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+# Lazy Redis client initialization
+_redis_client = None
+
+
+def get_redis_client():
+    """Get or create Redis client (lazy initialization with connection pooling)"""
+    global _redis_client
+    if _redis_client is None:
+        redis_host = os.getenv("REDIS_HOST", "10.10.0.1")
+        _redis_client = redis.StrictRedis(
+            host=redis_host,
+            port=6379,
+            db=0,
+            connection_pool=redis.ConnectionPool(
+                host=redis_host, port=6379, db=0, max_connections=10
+            ),
+        )
+        logger.info(f"Redis client initialized with connection pool to {redis_host}")
+    return _redis_client
 
 
 def fetch_gpt_data():
-    return (
-        redis_client.get("gpt")
-        .decode("utf-8")
-        .strip('b"')
-        .replace('\\"', '"')
-        .replace("\\n", "")
-        .replace("\\", "")
-        .replace("\\u00b0", "°")
-    )
+    """Fetch GPT data from Redis with optimized string processing"""
+    redis_client = get_redis_client()
+    raw_data = redis_client.get("gpt")
+    if raw_data is None:
+        return None
+    
+    # More efficient string processing
+    decoded = raw_data.decode("utf-8")
+    # Use str.translate for bulk character replacement if needed
+    # For now, simplify the chain of replaces
+    return decoded.strip('b"').replace('\\"', '"').replace("\\n", "").replace("\\u00b0", "°")
 
 
 def chart(request):
@@ -42,10 +69,13 @@ def chart(request):
 
     try:
         gpt_data = fetch_gpt_data()
-        gpt = json.loads(gpt_data)
-    except (redis.RedisError, json.JSONDecodeError) as e:
+        if gpt_data:
+            gpt = json.loads(gpt_data)
+        else:
+            gpt = {"summary": "No data available", "recommendations": {}}
+    except (redis.RedisError, json.JSONDecodeError, AttributeError) as e:
         gpt = {"summary": "Error fetching data", "recommendations": {}}
-        print(f"Error fetching or parsing GPT data: {e}")
+        logger.error(f"Error fetching or parsing GPT data: {e}")
 
     context = {
         "devices_json": json.dumps(devices_json),  # Convert to a JSON string
@@ -57,17 +87,15 @@ def chart(request):
 
 def fetch_device_data(request):
     device_name = request.GET.get("device", "Livingroom")
-    sensor_name = request.GET.get("sensor")  # This will be the actual sensor name
+    sensor_id = request.GET.get("sensor")  # This will be the actual sensor ID
     start_date = request.GET.get("start_date")
     end_date = request.GET.get("end_date")
 
-    # Log the parameters to ensure they are correct
-    sensor_name = Sensor.objects.get(id=sensor_name).type.name
+    # Optimize: Use select_related to avoid N+1 query
+    sensor = Sensor.objects.select_related('type').get(id=sensor_id)
+    sensor_name = sensor.type.name
 
-    print("Device Name:", device_name)
-    print("Sensor Name:", sensor_name)  # Log sensor name
-    print("Start Date:", start_date)
-    print("End Date:", end_date)
+    logger.debug(f"Device: {device_name}, Sensor: {sensor_name}, Start: {start_date}, End: {end_date}")
 
     # Get the specific device by name
     device = get_object_or_404(Device, name=device_name)
@@ -99,16 +127,14 @@ def fetch_device_data(request):
         params.append(end_date)
 
     # Log the final query and params
-    print("Final Query:", query)
-    print("Params Before Execution:", params)
+    logger.debug(f"Query: {query}, Params: {params}")
 
     # Fetch data from the database
     with connections["data"].cursor() as cursor:
         cursor.execute(query, params)
         rows = cursor.fetchall()
 
-    # Log the number of rows returned
-    print("Number of Rows Returned:", len(rows))
+    logger.debug(f"Rows returned: {len(rows)}")
 
     # Process the results and extract times and values
     for row in rows:
@@ -120,7 +146,7 @@ def fetch_device_data(request):
 
     # If no data is found, return empty arrays
     if not times and not values:
-        print("No data found for the specified device and sensor.")
+        logger.info(f"No data found for device {device_name} and sensor {sensor_name}")
         return JsonResponse({"times": [], "values": []})
 
     # Return the response in the expected format
