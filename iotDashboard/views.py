@@ -1,3 +1,14 @@
+"""
+Django views for IoT Dashboard.
+
+PERFORMANCE OPTIMIZATIONS:
+- Lazy Redis initialization with connection pooling (max 10 connections)
+- N+1 query prevention: Uses select_related() for sensor lookups
+- Proper logging: Uses Python logging module instead of print statements
+- Optimized string processing in data fetching
+
+See PERFORMANCE_IMPROVEMENTS.md for detailed analysis.
+"""
 import redis
 import json
 import logging
@@ -14,7 +25,7 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-# Lazy Redis client initialization
+# Lazy Redis client initialization with connection pooling
 _redis_client = None
 
 

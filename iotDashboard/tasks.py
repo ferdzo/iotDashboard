@@ -1,3 +1,14 @@
+"""
+Huey background tasks for IoT Dashboard.
+
+PERFORMANCE OPTIMIZATIONS:
+- Lazy initialization: No connections established at import time
+- Connection pooling: Redis, PostgreSQL, and HTTP connections are pooled and reused
+- N+1 query prevention: Uses prefetch_related() to minimize database queries
+- Proper logging: Uses Python logging module instead of print statements
+
+See PERFORMANCE_IMPROVEMENTS.md for detailed analysis.
+"""
 import json
 import datetime
 import os
@@ -18,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")  # Default to localhost if not set
 
-# Lazy initialization - no connections at import time
+# Lazy initialization - no connections at import time (prevents blocking imports)
 _redis_client = None
 _db_connection_pool = None
 _http_session = None
