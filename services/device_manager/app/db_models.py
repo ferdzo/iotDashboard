@@ -31,6 +31,7 @@ class DeviceCertificate(Base):
 
     __tablename__ = "device_certificates"
 
+    id = Column(Text, primary_key=True)
     device_id = Column(
         Text, ForeignKey("devices.id", ondelete="CASCADE"), primary_key=True
     )

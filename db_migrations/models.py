@@ -35,8 +35,9 @@ class DeviceCertificate(Base):
 
     __tablename__ = "device_certificates"
 
+    id = Column(Text, primary_key=True)
     device_id = Column(
-        Text, ForeignKey("devices.id", ondelete="CASCADE"), primary_key=True
+        Text, ForeignKey("devices.id", ondelete="CASCADE"), nullable=False
     )
     certificate_pem = Column(Text, nullable=False)
     private_key_pem = Column(Text)  # Optional: for backup/escrow
@@ -44,8 +45,13 @@ class DeviceCertificate(Base):
     expires_at = Column(DateTime(timezone=True), nullable=False)
     revoked_at = Column(DateTime(timezone=True))
 
+    __table_args__ = (
+        Index("idx_device_certificates_device_id", "device_id"),
+        Index("idx_device_certificates_active", "device_id", "revoked_at"),
+    )
+
     def __repr__(self):
-        return f"<DeviceCertificate(device_id={self.device_id}, expires={self.expires_at})>"
+        return f"<DeviceCertificate(id={self.id}, device_id={self.device_id}, expires={self.expires_at})>"
 
 
 class Telemetry(Base):
