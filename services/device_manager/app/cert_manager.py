@@ -7,8 +7,8 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 from nanoid import generate
 
-from config import config
-from models import DeviceRegistrationResponse
+from app.config import config
+from app.models import DeviceRegistrationResponse
 
 lowercase_numbers = "abcdefghijklmnopqrstuvwxyz0123456789"
 

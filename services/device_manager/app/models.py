@@ -2,6 +2,7 @@ import datetime
 
 from pydantic import BaseModel
 
+
 class DeviceRegistrationRequest(BaseModel):
     """Request model for registering a new device."""
 

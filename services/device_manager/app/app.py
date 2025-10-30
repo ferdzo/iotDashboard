@@ -1,12 +1,12 @@
 import datetime
 import logging
 
-from db_models import Device, DeviceCertificate  # SQLAlchemy ORM models
 from fastapi import FastAPI, HTTPException
 
-from cert_manager import CertificateManager
-from database import get_db_context
-from models import DeviceRegistrationRequest, DeviceRegistrationResponse, DeviceResponse
+from app.cert_manager import CertificateManager
+from app.database import get_db_context
+from app.db_models import Device, DeviceCertificate  # SQLAlchemy ORM models
+from app.models import DeviceRegistrationRequest, DeviceRegistrationResponse, DeviceResponse
 
 logger = logging.getLogger(__name__)
 
