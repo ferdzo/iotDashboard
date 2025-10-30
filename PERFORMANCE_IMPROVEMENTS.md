@@ -118,18 +118,23 @@ logger.info("Redis connection established")
 
 ### 5. Inefficient String Processing (Low Priority)
 
-**Problem**: Chain of string operations without optimization.
+**Problem**: Chain of string operations without optimization and missing null check.
 ```python
-# OLD - Multiple passes over string
-redis_client.get("gpt")
-    .decode("utf-8")
-    .strip('b"')
-    .replace('\\"', '"')
-    .replace("\\n", "")
-    .replace("\\", "")
+# OLD - Multiple passes over string, no null check
+raw = redis_client.get("gpt")
+# Could raise AttributeError if raw is None
+result = raw.decode("utf-8").strip('b"').replace('\\"', '"')...
 ```
 
 **Solution**: Optimized with null check and simplified operations.
+```python
+# NEW - With null check
+raw_data = redis_client.get("gpt")
+if raw_data is None:
+    return None
+decoded = raw_data.decode("utf-8")
+return decoded.strip('b"').replace('\\"', '"')...
+```
 
 ## Performance Metrics
 
@@ -153,7 +158,7 @@ redis_client.get("gpt")
 
 ## Additional Recommendations
 
-### High Priority
+### Critical Priority (Should be addressed soon)
 
 1. **Add Database Indexes**
    ```sql
@@ -177,7 +182,7 @@ redis_client.get("gpt")
    - In `insert_data()`, consider batching multiple inserts
    - Use `executemany()` or bulk operations
 
-### Medium Priority
+### High Priority (Should be addressed next)
 
 4. **Add Rate Limiting**
    - Prevent abuse of API endpoints
@@ -193,7 +198,7 @@ redis_client.get("gpt")
    - Monitor connection pool utilization
    - Add APM tool (e.g., New Relic, DataDog)
 
-### Low Priority
+### Medium Priority (Can be addressed later)
 
 7. **Consider Message Queue**
    - For high-volume MQTT data, consider Celery or similar
