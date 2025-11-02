@@ -1,66 +1,114 @@
 The following concise instructions help AI coding agents become productive in this repository.
 
 Purpose
-- This repo is a small Django-based IoT dashboard that ingests sensor data via MQTT, stores metadata in Django models, temporarily queues messages in Redis (streams/hashes), and persistently stores timeseries in Postgres/Timescale via background tasks (Huey).
+- This repo is a microservices-based IoT platform for device management, data ingestion, and telemetry storage. The system uses MQTT with mTLS authentication, Redis streams for message queuing, and PostgreSQL/TimescaleDB for persistent storage.
 
 Big Picture
+- Architecture: Device → MQTT (mTLS) → mqtt_ingestion → Redis → db_write → PostgreSQL/TimescaleDB
 - Components:
-  - `iotDashboard/` — Django app (models, views, templates, tasks)
-  - `manage.py` — Django CLI
-  - `mqtt_service.py` — standalone MQTT client that subscribes to device topics and writes to Redis
-  - `tasks.py` — Huey periodic tasks that read Redis and write to Postgres
-  - Redis — used for device metadata (`mqtt_devices`), per-sensor streams and latest-value hashes
-  - Postgres/Timescale — final storage for `sensor_readings` table (raw SQL used in places)
+  - `services/device_manager/` — FastAPI service for device registration, X.509 certificate issuance, and lifecycle management
+  - `services/mqtt_ingestion/` — MQTT client that subscribes to device topics and writes to single Redis stream `mqtt:ingestion`
+  - `services/db_write/` — Consumer service that reads from Redis streams and writes to database using consumer groups
+  - `db_migrations/` — Alembic migrations for schema management (SQLAlchemy models)
+  - `infrastructure/` — Docker Compose setup (PostgreSQL, Redis, Mosquitto MQTT broker)
+  - `iotDashboard/` — Legacy Django app (being phased out)
 
 Key Files To Read First
-- `iotDashboard/settings.py` — central settings; environment variables expected: `SECRET_KEY`, `CONNECTION_STRING`, `MQTT_BROKER`, `MQTT_USER`, `MQTT_PASS`, `REDIS_HOST`.
-- `iotDashboard/models.py` — `Device`, `Sensor`, `SensorType`; these shape how devices and sensors are represented.
-- `mqtt_service.py` — where MQTT messages are received and written to Redis. Important for stream naming and payload format.
-- `iotDashboard/tasks.py` — Huey tasks that consume Redis and insert into the DB. Shows ingestion logic and timescale interactions.
-- `iotDashboard/views.py` and `templates/chart.html` — how the UI reads `mqtt_latest`/Timescale data and what format it expects.
+- `db_migrations/models.py` — SQLAlchemy models: `Device`, `DeviceCertificate`, `Telemetry`. Canonical schema definition.
+- `services/device_manager/app/app.py` — FastAPI endpoints for device registration, certificate management, revocation, renewal.
+- `services/device_manager/app/cert_manager.py` — X.509 certificate generation, CA management, CRL generation.
+- `services/mqtt_ingestion/src/mqtt_client.py` — MQTT subscriber that parses `devices/{device_id}/{metric}` topics.
+- `services/mqtt_ingestion/src/redis_writer.py` — Writes to single stream `mqtt:ingestion` with device_id, metric, value, timestamp.
+- `services/db_write/src/redis_reader.py` — Consumer group reader for `mqtt:ingestion` stream.
+- `services/db_write/src/db_writer.py` — Batch writes to `telemetry` table using SQLAlchemy.
+- `infrastructure/compose.yml` — Docker services: PostgreSQL/TimescaleDB, Redis, Mosquitto MQTT.
+- `infrastructure/mosquitto/mosquitto.conf` — MQTT broker config with mTLS on port 8883, CRL checking enabled.
 
 Important Conventions & Patterns
-- Redis usage: repo stores device metadata under `mqtt_devices` (JSON), and the code uses Redis streams and hashes inconsistently. When changing stream behavior, update both `mqtt_service.py` and `tasks.py` to remain compatible.
-- Topic/Stream canonicalization: adopt a single convention: MQTT topic `devices/{device_id}/{sensor}` and Redis stream `mqtt_stream:{device_id}:{sensor}`. Latest-value hash pattern: `mqtt_latest:{device_id}`.
-- No `requirements.txt` in repo; use `python-dotenv` + `redis`, `paho-mqtt`, `huey`, `psycopg2-binary`, `requests`, `Django` (4.2) — add a `requirements.txt` before running.
-- Avoid import-time side-effects: `tasks.py` currently opens Redis and calls `devices_to_redis()` at import time — refactor to lazy init or a management command.
+- **Single stream architecture**: All MQTT data flows through one Redis stream `mqtt:ingestion`. Each message contains `device_id`, `metric`, `value`, `timestamp`.
+- **MQTT topics**: Standard format `devices/{device_id}/{metric}`. Examples: `devices/abc123/temperature`, `devices/xyz789/humidity`.
+- **Certificate IDs**: Use certificate serial number (hex format) as primary key in `device_certificates` table. Multiple certificates per device supported.
+- **Package manager**: All services use `uv` for dependency management (`pyproject.toml` not `requirements.txt`).
+- **Database migrations**: Use Alembic for schema changes. Run migrations from `db_migrations/` directory.
+- **Configuration**: All services use `.env` files. Never hardcode hosts/credentials.
+- **Import organization**: Services have `app/` or `src/` package structure. Import as `from app.module import ...` or `from src.module import ...`.
+- **Consumer groups**: `db_write` uses Redis consumer groups for at-least-once delivery. Consumer name must be unique per instance.
 
 Developer Workflows (commands & notes)
-- Run Django dev server (use virtualenv and install deps):
-  - `pip install -r requirements.txt` (create this file if missing)
-  - `python manage.py migrate`
-  - `python manage.py runserver`
-- Run MQTT service locally (requires Redis & MQTT broker):
-  - `python mqtt_service.py`
-  - Example publish: `mosquitto_pub -t "devices/esp32/test_temperature" -m "23.5"`
-- Huey tasks:
-  - The project uses `huey.contrib.djhuey`; run workers with Django settings: `python manage.py run_huey` (ensure huey is installed and configured in `HUEY` setting).
-- Inspect Redis during debugging:
-  - `redis-cli KEYS "mqtt*"`
-  - `redis-cli XREVRANGE mqtt_stream:mydevice:temperature + - COUNT 10`
-  - `redis-cli HGETALL mqtt_latest:mydevice`
+- **Start infrastructure**: `cd infrastructure && docker compose up -d` (Postgres, Redis, Mosquitto)
+- **Run database migrations**: `cd db_migrations && uv run alembic upgrade head`
+- **Generate CA certificate**: `cd services/device_manager && ./generate_ca.sh` (first time only)
+- **Run device_manager**: `cd services/device_manager && uv run uvicorn app.app:app --reload --port 8000`
+- **Run mqtt_ingestion**: `cd services/mqtt_ingestion && uv run main.py`
+- **Run db_write**: `cd services/db_write && uv run main.py`
+- **Register device**: `curl -X POST http://localhost:8000/devices/register -H "Content-Type: application/json" -d '{"name":"test","location":"lab"}'`
+- **Test MQTT with mTLS**: `mosquitto_pub --cafile ca.crt --cert device.crt --key device.key -h localhost -p 8883 -t "devices/abc123/temperature" -m "23.5"`
+- **Inspect Redis stream**: `redis-cli XLEN mqtt:ingestion` and `redis-cli XRANGE mqtt:ingestion - + COUNT 10`
+- **Check consumer group**: `redis-cli XINFO GROUPS mqtt:ingestion`
+- **View CRL**: `openssl crl -in infrastructure/mosquitto/certs/ca.crl -text -noout`
 
 Integration Points & Gotchas
-- Environment variables: many hosts/credentials are taken from `.env` via `python-dotenv`. If missing, code sometimes falls back to defaults or will raise at runtime. Add `.env` or set env vars in the system.
-- DB access: `tasks.py` sometimes uses `psycopg2.connect(settings.CONNECTION_STRING)` while views use Django connections. If you change DB config, update both patterns or consolidate to Django connections.
-- Topic parsing: `mqtt_service.py` expects at least 3 topic parts (it reads `topic_parts[2]`) — be defensive when editing.
-- Stream payloads: `xadd` must receive simple string fields (no nested dicts). When changing stream layout, update the reader in `tasks.py` accordingly.
-- Logging: repo uses `print` widely. Prefer converting prints to Python `logging` for maintainability.
+- **Environment variables**: All services load from `.env` files. No defaults - service will fail if required vars missing. Copy `.env.example` first.
+- **Certificate paths**: `device_manager` writes CRL to `infrastructure/mosquitto/certs/ca.crl`. Mosquitto must restart after CRL updates.
+- **Database schema**: Schema changes require Alembic migration. Never modify tables manually. Use `alembic revision --autogenerate`.
+- **MQTT topic parsing**: `mqtt_ingestion` expects exactly `devices/{device_id}/{metric}` (3 parts). Invalid topics are logged and dropped.
+- **Redis stream format**: `mqtt:ingestion` messages must have `device_id`, `metric`, `value`, `timestamp` fields (all strings).
+- **Consumer groups**: `db_write` creates consumer group `db_writer` automatically. Don't delete it manually.
+- **Certificate serial numbers**: Used as primary key in `device_certificates.id`. Extract with `format(cert.serial_number, 'x')`.
+- **TimescaleDB hypertables**: `telemetry` table is a hypertable. Don't add constraints that break time partitioning.
+- **File permissions**: Mosquitto directories may be owned by UID 1883. Fix with `sudo chown -R $USER:$USER infrastructure/mosquitto/`.
 
 What AI agents should do first
-- Do not change stream/topic names unless you update both `mqtt_service.py` and `tasks.py`.
-- Remove import-time Redis initializations and `exit()` calls; move to lazily-created client getters or management commands.
-- Centralize config in `settings.py` and import `from django.conf import settings` in scripts instead of hardcoded IPs.
-- When making API/DB changes, prefer to update `views.py` and `tasks.py` together and add short integration tests using `pytest` and a Redis test double (or local docker-compose).
+- **Read architecture first**: Check `README.md` for current architecture. System is microservices-based, not Django monolith.
+- **Check database schema**: Always start with `db_migrations/models.py` to understand data model.
+- **Don't change stream names**: Single stream `mqtt:ingestion` is used by mqtt_ingestion and db_write. Changing breaks both services.
+- **Use proper imports**: Services use package structure. Import from `app.*` or `src.*`, not relative imports.
+- **Create migrations**: Schema changes require `alembic revision --autogenerate`. Never modify models without migration.
+- **Test with real infrastructure**: Use `docker compose up` for integration testing. Unit tests are insufficient for this architecture.
+- **Check .env files**: Each service has `.env.example`. Copy and configure before running.
 
 Examples (copyable snippets)
-- XADD to create canonical stream entry:
-  - `redis_client.xadd(f"mqtt_stream:{device_id}:{sensor}", {"value": str(sensor_value), "time": datetime.utcnow().isoformat()})`
-- Create/read consumer group (ingest):
-  - `redis_client.xgroup_create(stream, "ingest", id="0", mkstream=True)`
-  - `entries = redis_client.xreadgroup("ingest", consumer_name, {stream: ">"}, count=10, block=5000)`
+- **Write to single stream** (mqtt_ingestion):
+  ```python
+  redis_client.xadd("mqtt:ingestion", {
+      "device_id": device_id,
+      "metric": sensor_type,
+      "value": str(value),
+      "timestamp": datetime.utcnow().isoformat()
+  })
+  ```
+
+- **Read from stream with consumer group** (db_write):
+  ```python
+  results = redis_client.xreadgroup(
+      groupname="db_writer",
+      consumername="worker-01",
+      streams={"mqtt:ingestion": ">"},
+      count=100,
+      block=5000
+  )
+  ```
+
+- **Extract certificate serial number**:
+  ```python
+  from cryptography import x509
+  cert = x509.load_pem_x509_certificate(cert_pem)
+  cert_id = format(cert.serial_number, 'x')
+  ```
+
+- **Query active certificates**:
+  ```python
+  device_cert = db.query(DeviceCertificate).filter(
+      DeviceCertificate.device_id == device_id,
+      DeviceCertificate.revoked_at.is_(None)
+  ).first()
+  ```
 
 If you add or change docs
-- Update `README.md` with a simple `docker-compose.yml` recipe for Redis/Postgres/Mosquitto and document environment variables. Update `env.sample` with `REDIS_HOST`, `CONNECTION_STRING`, `MQTT_BROKER`, `MQTT_USER`, `MQTT_PASS`.
+- Update `README.md` for architecture changes
+- Update `.github/copilot-instructions.md` for development workflow changes  
+- Update service-specific READMEs (`services/*/README.md`) for API or configuration changes
+- Document environment variables in `.env.example` files
+- Add migration notes to Alembic revision if schema change is complex
 
 If anything in these instructions looks off or incomplete for your current refactor, tell me what you'd like to focus on and I'll iterate.

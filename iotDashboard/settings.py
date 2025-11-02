@@ -13,7 +13,6 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 from dotenv import load_dotenv
 from pathlib import Path
 import os
-# from huey import SqliteHuey
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -27,7 +26,12 @@ load_dotenv()
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv("SECRET_KEY")
-CONNECTION_STRING = os.getenv("CONNECTION_STRING")
+
+POSTGRES_HOST = os.getenv("POSTGRES_HOST")
+POSTGRES_PORT = os.getenv("POSTGRES_PORT")
+POSTGRES_USER = os.getenv("POSTGRES_USER")
+POSTGRES_DB = os.getenv("POSTGRES_DB")
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -45,7 +49,6 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "iotDashboard",
-    # 'huey.contrib.djhuey',
 ]
 
 MIDDLEWARE = [
@@ -84,17 +87,14 @@ WSGI_APPLICATION = "iotDashboard.wsgi.application"
 
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+       "ENGINE": "django.db.backends.postgresql",
+        "NAME": POSTGRES_DB,
+        "USER": POSTGRES_USER,
+        "PASSWORD": POSTGRES_PASSWORD,
+        "HOST": POSTGRES_HOST,
+        "PORT": POSTGRES_PORT,
     },
-    "data": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": "example",
-        "USER": "postgres",
-        "PASSWORD": os.getenv("PASSWORD"),
-        "HOST": "10.10.0.1",
-        "PORT": "5555",
-    },
+   
 }
 
 
@@ -139,12 +139,3 @@ STATIC_URL = "static/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-
-# HUEY = {
-#     'huey_class': 'huey.SqliteHuey',  # Or 'huey.RedisHuey' for Redis
-#     'filename': 'demo.db',  # SQLite file for task storage
-#     'results': True,
-#     'store_none': False,
-#     'immediate': False,
-#     'utc': True,
-# }

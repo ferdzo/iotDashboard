@@ -4,7 +4,7 @@ SQLAlchemy ORM models for device manager service.
 These models mirror the database schema defined in db_migrations.
 Kept separate to make the service independent.
 """
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Text
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Index, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 
@@ -19,11 +19,13 @@ class Device(Base):
     id = Column(Text, primary_key=True)
     name = Column(Text, nullable=False)
     location = Column(Text)
+    protocol = Column(Text, nullable=False, default="mqtt")
+    connection_config = Column(JSON)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     def __repr__(self):
-        return f"<Device(id={self.id}, name={self.name})>"
+        return f"<Device(id={self.id}, name={self.name}, protocol={self.protocol})>"
 
 
 class DeviceCertificate(Base):
@@ -33,7 +35,7 @@ class DeviceCertificate(Base):
 
     id = Column(Text, primary_key=True)
     device_id = Column(
-        Text, ForeignKey("devices.id", ondelete="CASCADE"), primary_key=True
+        Text, ForeignKey("devices.id", ondelete="CASCADE"), nullable=False
     )
     certificate_pem = Column(Text, nullable=False)
     private_key_pem = Column(Text)
@@ -41,5 +43,34 @@ class DeviceCertificate(Base):
     expires_at = Column(DateTime(timezone=True), nullable=False)
     revoked_at = Column(DateTime(timezone=True))
 
+    __table_args__ = (
+        Index("idx_device_certificates_device_id", "device_id"),
+        Index("idx_device_certificates_active", "device_id", "revoked_at"),
+    )
+
     def __repr__(self):
-        return f"<DeviceCertificate(device_id={self.device_id}, expires={self.expires_at})>"
+        return f"<DeviceCertificate(id={self.id}, device_id={self.device_id}, expires={self.expires_at})>"
+
+
+class DeviceCredential(Base):
+    """Authentication credentials for non-mTLS protocols (HTTP, webhook, etc)."""
+
+    __tablename__ = "device_credentials"
+
+    id = Column(Text, primary_key=True)
+    device_id = Column(
+        Text, ForeignKey("devices.id", ondelete="CASCADE"), nullable=False
+    )
+    credential_type = Column(Text, nullable=False)
+    credential_hash = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    expires_at = Column(DateTime(timezone=True))
+    revoked_at = Column(DateTime(timezone=True))
+
+    __table_args__ = (
+        Index("idx_device_credentials_device_id", "device_id"),
+        Index("idx_device_credentials_active", "device_id", "revoked_at"),
+    )
+
+    def __repr__(self):
+        return f"<DeviceCredential(id={self.id}, device_id={self.device_id}, type={self.credential_type})>"

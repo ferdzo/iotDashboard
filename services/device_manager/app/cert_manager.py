@@ -8,7 +8,7 @@ from cryptography.x509.oid import NameOID
 from nanoid import generate
 
 from app.config import config
-from app.models import DeviceRegistrationResponse
+from app.models import DeviceCertificateResponse, DeviceCredentials
 
 lowercase_numbers = "abcdefghijklmnopqrstuvwxyz0123456789"
 
@@ -21,9 +21,11 @@ class CertificateManager:
         self.ca_key: rsa.RSAPrivateKey = self.load_ca_private_key(config.CA_KEY_PATH)
         self.ca_cert_pem: bytes = self.ca_cert.public_bytes(serialization.Encoding.PEM)
 
+
     def generate_device_id(self) -> str:
         """Generate a unique device ID using nanoid."""
         return generate(alphabet=lowercase_numbers, size=config.DEVICE_ID_LENGTH)
+
 
     def load_ca_certificate(self, ca_cert_path: str) -> x509.Certificate:
         """Load a CA certificate from file."""
@@ -31,6 +33,7 @@ class CertificateManager:
             ca_data = f.read()
         ca_cert = x509.load_pem_x509_certificate(ca_data)
         return ca_cert
+
 
     def load_ca_private_key(self, ca_key_path: str, password: bytes = None) -> rsa.RSAPrivateKey:
         """Load a CA private key from file."""
@@ -41,9 +44,11 @@ class CertificateManager:
         ca_key = serialization.load_pem_private_key(key_data, password=password)
         return ca_key
 
+
     def generate_device_key(self, key_size: int = 4096) -> rsa.RSAPrivateKey:
         """Generate an RSA private key for a device."""
         return rsa.generate_private_key(public_exponent=65537, key_size=key_size)
+
 
     def generate_device_certificate(
         self,
@@ -88,12 +93,13 @@ class CertificateManager:
 
         return cert_pem, key_pem
 
+
     def create_device_credentials(
         self, device_id: str, validity_days: int = 365, key_size: int = 4096
-    ) -> dict:
+    ) -> DeviceCredentials:
         """Create device credentials: private key and signed certificate.
         Returns:
-            dict with certificate_id, device_id, certificate_pem, private_key_pem, ca_certificate_pem, expires_at
+            DeviceCredentials model with certificate_id, device_id, certificate_pem, private_key_pem, expires_at
         """
         device_key = self.generate_device_key(key_size=key_size)
 
@@ -108,39 +114,41 @@ class CertificateManager:
 
         # Extract serial number from certificate to use as ID
         cert = x509.load_pem_x509_certificate(cert_pem)
-        cert_id = format(cert.serial_number, 'x')  # Hex string of serial number
+        cert_id = format(cert.serial_number, 'x')
 
         expires_at = datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=validity_days)
 
-        return {
-            "certificate_id": cert_id,
-            "device_id": device_id,
-            "certificate_pem": cert_pem,
-            "private_key_pem": key_pem,
-            "ca_certificate_pem": self.ca_cert_pem,
-            "expires_at": expires_at,
-        }
+        return DeviceCredentials(
+            certificate_id=cert_id,
+            device_id=device_id,
+            certificate_pem=cert_pem,
+            private_key_pem=key_pem,
+            expires_at=expires_at,
+        )
 
-    def register_device(self, name: str, location: str | None = None) -> DeviceRegistrationResponse:
+
+    def register_device(self, name: str, location: str | None = None) -> DeviceCertificateResponse:
         """Register a new device and generate its credentials.
         Returns:
-            DeviceRegistrationResponse
+            DeviceCertificateResponse
         """
         device_id = self.generate_device_id()
         credentials = self.create_device_credentials(device_id=device_id)
 
-        return DeviceRegistrationResponse(
-            certificate_id=credentials["certificate_id"],
-            device_id=credentials["device_id"],
-            ca_certificate_pem=credentials["ca_certificate_pem"].decode("utf-8"),
-            certificate_pem=credentials["certificate_pem"].decode("utf-8"),
-            private_key_pem=credentials["private_key_pem"].decode("utf-8"),
-            expires_at=credentials["expires_at"],
+        return DeviceCertificateResponse(
+            certificate_id=credentials.certificate_id,
+            device_id=credentials.device_id,
+            ca_certificate_pem=self.ca_cert_pem.decode("utf-8"),
+            certificate_pem=credentials.certificate_pem.decode("utf-8"),
+            private_key_pem=credentials.private_key_pem.decode("utf-8"),
+            expires_at=credentials.expires_at,
         )
+
 
     def get_ca_certificate_pem(self) -> str:
         """Get the CA certificate in PEM format as a string."""
         return self.ca_cert_pem.decode("utf-8")
+
 
     def revoke_certificate(
         self, certificate_pem: str, reason: x509.ReasonFlags = x509.ReasonFlags.unspecified
@@ -197,6 +205,7 @@ class CertificateManager:
         with open(crl_path, "wb") as f:
             f.write(crl.public_bytes(serialization.Encoding.PEM))
 
+
     def get_crl_pem(self) -> str | None:
         """Get the current CRL in PEM format."""
         crl_path = Path(config.CRL_PATH)
@@ -205,6 +214,7 @@ class CertificateManager:
 
         with open(crl_path, "rb") as f:
             return f.read().decode("utf-8")
+
 
     def renew_certificate(
         self,

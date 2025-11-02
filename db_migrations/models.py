@@ -8,7 +8,7 @@ To modify schema:
 4. Run: alembic upgrade head
 """
 
-from sqlalchemy import Boolean, Column, Float, ForeignKey, Index, Text, DateTime
+from sqlalchemy import Boolean, Column, Float, ForeignKey, Index, Text, DateTime, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 
@@ -23,13 +23,13 @@ class Device(Base):
     id = Column(Text, primary_key=True)
     name = Column(Text, nullable=False)
     location = Column(Text)
+    protocol = Column(Text, nullable=False, default="mqtt")
+    connection_config = Column(JSON)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     def __repr__(self):
-        return f"<Device(id={self.id}, name={self.name})>"
-
-
+        return f"<Device(id={self.id}, name={self.name}, protocol={self.protocol})>"
 class DeviceCertificate(Base):
     """X.509 certificates issued to devices for mTLS authentication."""
 
@@ -40,7 +40,7 @@ class DeviceCertificate(Base):
         Text, ForeignKey("devices.id", ondelete="CASCADE"), nullable=False
     )
     certificate_pem = Column(Text, nullable=False)
-    private_key_pem = Column(Text)  # Optional: for backup/escrow
+    private_key_pem = Column(Text)
     issued_at = Column(DateTime(timezone=True), nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     revoked_at = Column(DateTime(timezone=True))
@@ -52,6 +52,30 @@ class DeviceCertificate(Base):
 
     def __repr__(self):
         return f"<DeviceCertificate(id={self.id}, device_id={self.device_id}, expires={self.expires_at})>"
+
+
+class DeviceCredential(Base):
+    """Authentication credentials for non-mTLS protocols (HTTP, webhook, etc)."""
+
+    __tablename__ = "device_credentials"
+
+    id = Column(Text, primary_key=True)
+    device_id = Column(
+        Text, ForeignKey("devices.id", ondelete="CASCADE"), nullable=False
+    )
+    credential_type = Column(Text, nullable=False)
+    credential_hash = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    expires_at = Column(DateTime(timezone=True))
+    revoked_at = Column(DateTime(timezone=True))
+
+    __table_args__ = (
+        Index("idx_device_credentials_device_id", "device_id"),
+        Index("idx_device_credentials_active", "device_id", "revoked_at"),
+    )
+
+    def __repr__(self):
+        return f"<DeviceCredential(id={self.id}, device_id={self.device_id}, type={self.credential_type})>"
 
 
 class Telemetry(Base):
