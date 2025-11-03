@@ -15,7 +15,7 @@ services:
       - "9001:9001"
       - "8883:8883"
     volumes:
-      - ./mosquitto/:/mosquitto/
+      - ./mosquitto/:/mosquitto/:Z
     restart: unless-stopped
   
   timescaledb:

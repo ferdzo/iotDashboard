@@ -22,21 +22,4 @@ class GPTService:
             self.logger.error(f"Unsupported provider: {self.provider_name}")
             raise ValueError(f"Unsupported provider: {self.provider_name}")
 
-    def analyze_metrics(self, metrics: dict) -> str:
-        """Analyze given metrics using GPT model and return insights."""
-        prompt = f"Analyze the following metrics and provide insights:\n{metrics}"
-        try:
-            response = openai.Completion.create(
-                engine=self.model_name,
-                prompt=prompt,
-                max_tokens=150,
-                n=1,
-                stop=None,
-                temperature=0.7,
-            )
-            insights = response.choices[0].text.strip()
-            self.logger.info("Successfully obtained insights from GPT model")
-            return insights
-        except Exception as e:
-            self.logger.error(f"Error during GPT analysis: {e}")
-            raise
+        

@@ -6,6 +6,7 @@ from sqlalchemy.pool import QueuePool
 
 from src.config import config
 from src.schema import TelemetryReading
+from src.models import Telemetry
 
 
 class DatabaseWriter:
@@ -37,9 +38,9 @@ class DatabaseWriter:
 
         session = self.SessionLocal()
         try:
-            # Convert to database objects using the correct field mapping
+            # Convert dataclass readings to SQLAlchemy Telemetry objects
             db_objects = [
-                TelemetryReading(
+                Telemetry(
                     time=reading.time,
                     device_id=reading.device_id,
                     metric=reading.metric,
@@ -57,7 +58,7 @@ class DatabaseWriter:
             return True
 
         except Exception as e:
-            self.logger.error(f"Failed to write batch: {e}")
+            self.logger.error(f"Failed to write batch: {e}", exc_info=True)
             session.rollback()
             return False
         finally:

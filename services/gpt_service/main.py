@@ -1,4 +1,8 @@
+from gpt_service import GPTService
+
+
 def main():
+    GPTService()
     print("Hello from gpt-service!")
 
 
