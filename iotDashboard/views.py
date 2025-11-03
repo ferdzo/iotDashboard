@@ -1,235 +1,263 @@
-import redis
 import json
-from django.db import connections
-from django.http import JsonResponse, HttpResponse
-from django.shortcuts import render, redirect, get_object_or_404
+from django.http import JsonResponse
+from django.shortcuts import render, redirect
+from django.contrib import messages
 
-from .forms import DeviceForm, SensorWithTypeForm
-from iotDashboard.models import Device, Sensor
+from iotDashboard.models import Device, Telemetry
+from iotDashboard.device_manager_client import DeviceManagerClient, DeviceManagerAPIError
 
-redis_client = redis.StrictRedis(host="10.10.0.1", port=6379, db=0)
+device_manager = DeviceManagerClient()
 
 
-def fetch_gpt_data():
-    return (
-        redis_client.get("gpt")
-        .decode("utf-8")
-        .strip('b"')
-        .replace('\\"', '"')
-        .replace("\\n", "")
-        .replace("\\", "")
-        .replace("\\u00b0", "°")
-    )
+# def index(request):
+#     """Redirect to chart page."""
+#     if request.user.is_authenticated:
+#         return redirect("/chart/")
+#     return HttpResponse("NOT AUTHENTICATED!!!")
 
 
 def chart(request):
-    # Fetch devices and their related sensors
-    devices = Device.objects.prefetch_related(
-        "sensors__type"
-    ).all()  # Prefetch related sensors and their types
-
-    # Create a list of devices and associated sensors
-    devices_json = [
-        {
-            "name": device.name,
-            "sensors": [
-                {"id": sensor.id, "type": sensor.type.name}
-                for sensor in device.sensors.all()
-            ],
-        }
-        for device in devices
-    ]
-
+    """Main dashboard showing telemetry charts."""
     try:
-        gpt_data = fetch_gpt_data()
-        gpt = json.loads(gpt_data)
-    except (redis.RedisError, json.JSONDecodeError) as e:
-        gpt = {"summary": "Error fetching data", "recommendations": {}}
-        print(f"Error fetching or parsing GPT data: {e}")
-
-    context = {
-        "devices_json": json.dumps(devices_json),  # Convert to a JSON string
-        "gpt": gpt,
-    }
-
-    return render(request, "chart.html", context)
+        devices = Device.objects.all()
+        
+        devices_data = []
+        for device in devices:
+            # Get unique metrics for this device from telemetry
+            metrics = (
+                Telemetry.objects
+                .filter(device_id=device.id)
+                .values_list('metric', flat=True)
+                .distinct()
+            )
+            
+            devices_data.append({
+                "id": device.id,
+                "name": device.name,
+                "protocol": device.protocol,
+                "metrics": list(metrics),
+            })
+        
+        context = {
+            "devices_json": json.dumps(devices_data),
+        }
+        
+        return render(request, "chart.html", context)
+    
+    except Exception as e:
+        messages.error(request, f"Error loading dashboard: {str(e)}")
+        return render(request, "chart.html", {"devices_json": "[]"})
 
 
 def fetch_device_data(request):
-    device_name = request.GET.get("device", "Livingroom")
-    sensor_name = request.GET.get("sensor")  # This will be the actual sensor name
+    """Fetch telemetry data for chart visualization."""
+    from datetime import datetime, timedelta
+    from django.utils import timezone
+    
+    device_id = request.GET.get("device_id")
+    metric = request.GET.get("metric")
     start_date = request.GET.get("start_date")
     end_date = request.GET.get("end_date")
 
-    # Log the parameters to ensure they are correct
-    sensor_name = Sensor.objects.get(id=sensor_name).type.name
+    if not device_id:
+        return JsonResponse({"error": "device_id is required"}, status=400)
 
-    print("Device Name:", device_name)
-    print("Sensor Name:", sensor_name)  # Log sensor name
-    print("Start Date:", start_date)
-    print("End Date:", end_date)
-
-    # Get the specific device by name
-    device = get_object_or_404(Device, name=device_name)
-
-    # Initialize lists to store times and values
-    times = []
-    values = []
-
-    # Prepare SQL query and parameters for the device
-    query = """
-        SELECT time, metric, value
-        FROM sensor_readings
-        WHERE device_name = %s
-    """
-    params = [device.name]
-
-    # If a specific sensor is specified, filter by that sensor name (converted to lowercase)
-    if sensor_name:
-        query += " AND metric = LOWER(%s)"  # Convert to lowercase for comparison
-        params.append(sensor_name.lower())  # Convert sensor name to lowercase
-
-    # Add time filtering to the query
-    if start_date:
-        query += " AND time >= %s::timestamptz"
-        params.append(start_date)
-
-    if end_date:
-        query += " AND time <= %s::timestamptz"
-        params.append(end_date)
-
-    # Log the final query and params
-    print("Final Query:", query)
-    print("Params Before Execution:", params)
-
-    # Fetch data from the database
-    with connections["data"].cursor() as cursor:
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-
-    # Log the number of rows returned
-    print("Number of Rows Returned:", len(rows))
-
-    # Process the results and extract times and values
-    for row in rows:
-        time, metric, value = row
-        formatted_time = time.strftime("%Y-%m-%d %H:%M:%S")
-
-        times.append(formatted_time)
-        values.append(value)
-
-    # If no data is found, return empty arrays
-    if not times and not values:
-        print("No data found for the specified device and sensor.")
-        return JsonResponse({"times": [], "values": []})
-
-    # Return the response in the expected format
-    return JsonResponse({"times": times, "values": values})
-
-
-def index(request):
-    if request.user.is_authenticated:
-        return redirect("/chart/")
-    return HttpResponse("NOT AUTHENTICATED!!!")
+    try:
+        # Build query using Django ORM
+        queryset = Telemetry.objects.filter(device_id=device_id)
+        
+        # Filter by metric if provided
+        if metric:
+            queryset = queryset.filter(metric=metric)
+        
+        # Parse and filter by date range (default to last 24 hours)
+        if start_date:
+            start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            queryset = queryset.filter(time__gte=start_dt)
+        else:
+            # Default: last 24 hours
+            queryset = queryset.filter(time__gte=timezone.now() - timedelta(hours=24))
+        
+        if end_date:
+            end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            queryset = queryset.filter(time__lte=end_dt)
+        
+        # Order by time and get values
+        results = queryset.order_by('time').values_list('time', 'value')
+        
+        times = []
+        values = []
+        for time, value in results:
+            times.append(time.strftime("%Y-%m-%d %H:%M:%S"))
+            values.append(float(value))
+        
+        return JsonResponse({"times": times, "values": values})
+    
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
 
 
 def device_list(request):
-    devices = Device.objects.all()
-    return render(request, "device_list.html", {"devices": devices})
+    """List all devices with their certificate status."""
+    try:
+        devices = Device.objects.all()
+        
+        # Enrich devices with certificate information
+        devices_with_certs = []
+        for device in devices:
+            device_data = {
+                "device": device,
+                "certificate_status": device.certificate_status if device.protocol == "mqtt" else "N/A",
+                "active_certificate": device.active_certificate if device.protocol == "mqtt" else None,
+            }
+            devices_with_certs.append(device_data)
+        
+        return render(request, "device_list.html", {"devices": devices_with_certs})
+    
+    except Exception as e:
+        messages.error(request, f"Error loading devices: {str(e)}")
+        return render(request, "device_list.html", {"devices": []})
 
 
 def add_device(request):
+    """Register a new device via device_manager API."""
     if request.method == "POST":
-        form = DeviceForm(request.POST)
-        if form.is_valid():
-            form.save()
-            return redirect("device_list")
-    else:
-        form = DeviceForm()
-    return render(request, "device_form.html", {"form": form})
+        name = request.POST.get("name")
+        location = request.POST.get("location")
+        protocol = request.POST.get("protocol", "mqtt")
+        
+        if not name:
+            messages.error(request, "Device name is required")
+            return render(request, "device_form.html")
+        
+        try:
+            response = device_manager.register_device(
+                name=name,
+                location=location,
+                protocol=protocol
+            )
+            
+            # Show credentials page (one-time view)
+            return render(request, "device_credentials.html", {
+                "device_name": name,
+                "response": response,
+            })
+        
+        except DeviceManagerAPIError as e:
+            messages.error(request, f"Failed to register device: {e.message}")
+            return render(request, "device_form.html", {
+                "name": name,
+                "location": location,
+                "protocol": protocol,
+            })
+    
+    return render(request, "device_form.html")
 
 
-def edit_device(request, pk):
-    device = get_object_or_404(Device, pk=pk)
-    if request.method == "POST":
-        form = DeviceForm(request.POST, instance=device)
-        if form.is_valid():
-            form.save()
-            return redirect("device_list")
-    else:
-        form = DeviceForm(instance=device)
-    return render(request, "device_form.html", {"form": form})
-
-
-def delete_device(request, pk):
-    device = get_object_or_404(Device, pk=pk)
-    if request.method == "POST":
-        device.delete()
+def view_device(request, device_id):
+    """View device details and certificate information."""
+    try:
+        device = Device.objects.get(id=device_id)
+        
+        # Get certificate if MQTT device
+        certificate = None
+        if device.protocol == "mqtt":
+            certificate = device.active_certificate
+        
+        context = {
+            "device": device,
+            "certificate": certificate,
+        }
+        
+        return render(request, "device_detail.html", context)
+    
+    except Device.DoesNotExist:
+        messages.error(request, f"Device {device_id} not found")
         return redirect("device_list")
-    return render(request, "device_confirm_delete.html", {"device": device})
+    except Exception as e:
+        messages.error(request, f"Error loading device: {str(e)}")
+        return redirect("device_list")
 
 
-def add_sensor_with_type(request):
-    if request.method == "POST":
-        form = SensorWithTypeForm(request.POST)
-        if form.is_valid():
-            form.save()  # This will save both Sensor and SensorType as needed
-            return redirect("device_list")  # Adjust this to your specific URL name
-    else:
-        form = SensorWithTypeForm()
+def delete_device(request, device_id):
+    """Delete a device."""
+    try:
+        device = Device.objects.get(id=device_id)
+        
+        if request.method == "POST":
+            device_name = device.name
+            device.delete()
+            messages.success(request, f"Device '{device_name}' deleted successfully")
+            return redirect("device_list")
+        
+        return render(request, "device_confirm_delete.html", {"device": device})
+    
+    except Device.DoesNotExist:
+        messages.error(request, f"Device {device_id} not found")
+        return redirect("device_list")
 
-    context = {"form": form}
-    return render(request, "sensor_form.html", context)
+
+def revoke_certificate(request, device_id):
+    """Revoke a device's certificate via device_manager API."""
+    try:
+        device = Device.objects.get(id=device_id)
+        
+        if device.protocol != "mqtt":
+            messages.error(request, "Only MQTT devices have certificates to revoke")
+            return redirect("device_list")
+        
+        if request.method == "POST":
+            try:
+                device_manager.revoke_certificate(device_id)
+                messages.success(request, f"Certificate for device '{device.name}' revoked successfully")
+            except DeviceManagerAPIError as e:
+                messages.error(request, f"Failed to revoke certificate: {e.message}")
+            
+            return redirect("device_list")
+        
+        return render(request, "certificate_revoke_confirm.html", {"device": device})
+    
+    except Device.DoesNotExist:
+        messages.error(request, f"Device {device_id} not found")
+        return redirect("device_list")
+
+
+def renew_certificate(request, device_id):
+    """Renew a device's certificate via device_manager API."""
+    try:
+        device = Device.objects.get(id=device_id)
+        
+        if device.protocol != "mqtt":
+            messages.error(request, "Only MQTT devices have certificates to renew")
+            return redirect("device_list")
+        
+        if request.method == "POST":
+            try:
+                response = device_manager.renew_certificate(device_id)
+                
+                # Show the new credentials (one-time view)
+                return render(request, "device_credentials.html", {
+                    "device_name": device.name,
+                    "response": response,
+                    "is_renewal": True,
+                })
+            except DeviceManagerAPIError as e:
+                messages.error(request, f"Failed to renew certificate: {e.message}")
+                return redirect("device_list")
+        
+        return render(request, "certificate_renew_confirm.html", {"device": device})
+    
+    except Device.DoesNotExist:
+        messages.error(request, f"Device {device_id} not found")
+        return redirect("device_list")
 
 
 def logout_view(request):
+    """Redirect to admin logout."""
     return redirect("/admin")
 
 
 def devices_api(request):
-    devices = list(Device.objects.all().values("name", "sensors__type__name"))
+    """JSON API endpoint for devices."""
+    devices = list(Device.objects.all().values("id", "name", "protocol", "location"))
     return JsonResponse(devices, safe=False)
-
-
-def sensor_list(request, device_id):
-    device = get_object_or_404(Device, id=device_id)
-    sensors = device.sensors.all()  # Get sensors for this specific device
-    return render(request, "sensor_list.html", {"device": device, "sensors": sensors})
-
-
-def edit_sensor(request, pk):
-    sensor = get_object_or_404(Sensor, pk=pk)
-    if request.method == "POST":
-        form = SensorWithTypeForm(request.POST, instance=sensor)
-        if form.is_valid():
-            form.save()
-            return redirect("sensor_list", device_id=sensor.device.pk)
-    else:
-        form = SensorWithTypeForm(instance=sensor)
-    return render(request, "sensor_form.html", {"form": form})
-
-
-def delete_sensor(request, pk):
-    sensor = get_object_or_404(Sensor, pk=pk)
-    if request.method == "POST":
-        device_id = sensor.device.pk
-        sensor.delete()
-        return redirect("sensor_list", device_id=device_id)
-    return render(request, "sensor_confirm_delete.html", {"sensor": sensor})
-
-
-def add_sensor(request, device_id):
-    device = get_object_or_404(Device, pk=device_id)
-    if request.method == "POST":
-        form = SensorWithTypeForm(request.POST)
-        if form.is_valid():
-            sensor = form.save(commit=False)
-            sensor.device = device  # Associate the sensor with the device
-            sensor.save()
-            return redirect(
-                "device_list"
-            )  # Redirect to device list or appropriate view
-    else:
-        form = SensorWithTypeForm()
-
-    return render(request, "sensor_form.html", {"form": form, "device": device})

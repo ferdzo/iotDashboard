@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Details - {{ device.name }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+   <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">IoT Dashboard</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item"><a class="nav-link" href="{% url 'index' %}">Chart</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% url 'device_list' %}">Devices</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+    
+    <div class="container mt-5">
+        <h1 class="text-center mb-4">Device Details</h1>
+        
+        {% if messages %}
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            {% endfor %}
+        {% endif %}
+        
+        <div class="card">
+            <div class="card-header">
+                <h3>{{ device.name }}</h3>
+            </div>
+            <div class="card-body">
+                <table class="table">
+                    <tr>
+                        <th>Device ID:</th>
+                        <td><code>{{ device.id }}</code></td>
+                    </tr>
+                    <tr>
+                        <th>Location:</th>
+                        <td>{{ device.location|default:"—" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Protocol:</th>
+                        <td><span class="badge bg-info">{{ device.protocol|upper }}</span></td>
+                    </tr>
+                    <tr>
+                        <th>Created:</th>
+                        <td>{{ device.created_at|date:"Y-m-d H:i:s" }}</td>
+                    </tr>
+                </table>
+                
+                {% if device.protocol == 'mqtt' and certificate %}
+                <h4 class="mt-4">Certificate Information</h4>
+                <table class="table">
+                    <tr>
+                        <th>Certificate ID:</th>
+                        <td><code>{{ certificate.id }}</code></td>
+                    </tr>
+                    <tr>
+                        <th>Issued At:</th>
+                        <td>{{ certificate.issued_at|date:"Y-m-d H:i:s" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Expires At:</th>
+                        <td>{{ certificate.expires_at|date:"Y-m-d H:i:s" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Status:</th>
+                        <td>
+                            {% if certificate.revoked_at %}
+                                <span class="badge bg-danger">Revoked</span>
+                            {% else %}
+                                <span class="badge bg-success">Active</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+                {% endif %}
+                
+                <div class="mt-4">
+                    <a href="{% url 'device_list' %}" class="btn btn-secondary">Back to List</a>
+                    {% if device.protocol == 'mqtt' %}
+                        <a href="{% url 'renew_certificate' device.id %}" class="btn btn-warning">Renew Certificate</a>
+                        <a href="{% url 'revoke_certificate' device.id %}" class="btn btn-danger">Revoke Certificate</a>
+                    {% endif %}
+                    <a href="{% url 'delete_device' device.id %}" class="btn btn-danger">Delete Device</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

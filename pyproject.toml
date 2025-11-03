@@ -23,4 +23,6 @@ dev = [
 [tool.uv.workspace]
 members = [
     "db_migrations",
+    "iotDashboard",
+    "services/gpt_service",
 ]

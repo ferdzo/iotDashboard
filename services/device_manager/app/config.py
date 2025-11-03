@@ -15,6 +15,7 @@ class Config:
     CERTS_DIR = SERVICE_DIR / "certs"
     CA_CERT_PATH = os.getenv("CA_CERT_PATH", str(CERTS_DIR / "ca.crt"))
     CA_KEY_PATH = os.getenv("CA_KEY_PATH", str(CERTS_DIR / "ca.key"))
+    CRL_PATH = os.getenv("CRL_PATH", str(CERTS_DIR / "ca.crl"))
 
     # Certificate settings
     CERT_VALIDITY_DAYS = int(os.getenv("CERT_VALIDITY_DAYS", "365"))

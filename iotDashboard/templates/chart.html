@@ -93,19 +93,19 @@
         <!-- Device Selector Dropdown -->
         <div class="row mb-4">
             <div class="col-md-4 offset-md-4">
-                <select id="deviceSelector" class="form-select" onchange="updateSensorOptions()">
+                <select id="deviceSelector" class="form-select" onchange="updateMetricOptions()">
                     <option value="">-- Select a Device --</option>
                     <script>
                         const devices = JSON.parse('{{ devices_json|escapejs }}');
 
                         const deviceSelector = document.getElementById('deviceSelector');
-                        const sensorSelector = document.getElementById('sensorSelector');
+                        const metricSelector = document.getElementById('metricSelector');
 
                         // Populate device selector
                         devices.forEach(device => {
                             const option = document.createElement('option');
-                            option.value = device.name; // Device name used for identification
-                            option.textContent = device.name;
+                            option.value = device.id; // Use device ID
+                            option.textContent = device.name + ' (' + device.protocol.toUpperCase() + ')';
                             deviceSelector.appendChild(option);
                         });
                     </script>
@@ -113,11 +113,11 @@
             </div>
         </div>
 
-        <!-- Sensor Selector Dropdown -->
+        <!-- Metric Selector Dropdown -->
         <div class="row mb-4">
             <div class="col-md-4 offset-md-4">
-                <select id="sensorSelector" class="form-select">
-                    <option value="">-- Select a Sensor --</option>
+                <select id="metricSelector" class="form-select">
+                    <option value="">-- Select a Metric --</option>
                 </select>
             </div>
         </div>
@@ -157,39 +157,39 @@
         var ctx = document.getElementById('conditionsChart').getContext('2d');
         var conditionsChart;
 
-        function updateSensorOptions() {
-            const selectedDeviceName = document.getElementById('deviceSelector').value;
+        function updateMetricOptions() {
+            const selectedDeviceId = document.getElementById('deviceSelector').value;
 
             // Find the selected device in the devices array
-            const selectedDevice = devices.find(device => device.name === selectedDeviceName);
+            const selectedDevice = devices.find(device => device.id === selectedDeviceId);
 
-            // Clear the existing options in the sensorSelector
-            const sensorSelector = document.getElementById('sensorSelector');
-            sensorSelector.innerHTML = '<option value="">-- Select a Sensor --</option>';
+            // Clear the existing options in the metricSelector
+            const metricSelector = document.getElementById('metricSelector');
+            metricSelector.innerHTML = '<option value="">-- Select a Metric --</option>';
 
-            if (selectedDevice) {
-                // Populate the sensor selector with the sensors for the selected device
-                selectedDevice.sensors.forEach(sensor => {
+            if (selectedDevice && selectedDevice.metrics) {
+                // Populate the metric selector with the metrics for the selected device
+                selectedDevice.metrics.forEach(metric => {
                     const option = document.createElement('option');
-                    option.value = sensor.id;  // Set the sensor ID as the value
-                    option.textContent = sensor.type; // Set the sensor type as the display text
-                    sensorSelector.appendChild(option);
+                    option.value = metric;
+                    option.textContent = metric.charAt(0).toUpperCase() + metric.slice(1);
+                    metricSelector.appendChild(option);
                 });
             }
         }
 
 function fetchDeviceData() {
-    var device = document.getElementById('deviceSelector').value;
-    var sensor = document.getElementById('sensorSelector').value; // Get selected sensor
+    var deviceId = document.getElementById('deviceSelector').value;
+    var metric = document.getElementById('metricSelector').value;
     var startDate = document.getElementById('startDate').value;
     var endDate = document.getElementById('endDate').value;
 
-    if (!device || !sensor) {
-        alert("Please select both a device and a sensor.");
+    if (!deviceId || !metric) {
+        alert("Please select both a device and a metric.");
         return;
     }
 
-    fetch(`/fetch_device_data/?device=${device}&sensor=${sensor}&start_date=${startDate}&end_date=${endDate}`)
+    fetch(`/fetch_device_data/?device_id=${deviceId}&metric=${metric}&start_date=${startDate}&end_date=${endDate}`)
         .then(response => {
             if (!response.ok) {
                 throw new Error("Network response was not ok: " + response.statusText);
@@ -212,9 +212,9 @@ function fetchDeviceData() {
                     labels: data.times,
                     datasets: [
                         {
-                            label: `${sensor} (°C or %)`,
+                            label: metric.charAt(0).toUpperCase() + metric.slice(1),
                             data: data.values,
-                            borderColor: sensor === 'Temperature' ? 'red' : 'blue',
+                            borderColor: metric === 'temperature' ? 'red' : (metric === 'humidity' ? 'blue' : 'green'),
                             fill: false,
                         }
                     ]

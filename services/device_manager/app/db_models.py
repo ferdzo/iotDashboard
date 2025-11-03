@@ -1,14 +1,10 @@
 """
-Database models for the IoT Dashboard.
+SQLAlchemy ORM models for device manager service.
 
-To modify schema:
-1. Edit models here
-2. Run: alembic revision --autogenerate -m "description"
-3. Review the generated migration in alembic/versions/
-4. Run: alembic upgrade head
+These models mirror the database schema defined in db_migrations.
+Kept separate to make the service independent.
 """
-
-from sqlalchemy import Boolean, Column, Float, ForeignKey, Index, Text, DateTime, JSON
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Index, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 
@@ -30,6 +26,8 @@ class Device(Base):
 
     def __repr__(self):
         return f"<Device(id={self.id}, name={self.name}, protocol={self.protocol})>"
+
+
 class DeviceCertificate(Base):
     """X.509 certificates issued to devices for mTLS authentication."""
 
@@ -76,22 +74,3 @@ class DeviceCredential(Base):
 
     def __repr__(self):
         return f"<DeviceCredential(id={self.id}, device_id={self.device_id}, type={self.credential_type})>"
-
-
-class Telemetry(Base):
-    """
-    Time-series telemetry data from devices.
-    """
-
-    __tablename__ = "telemetry"
-
-    time = Column(DateTime(timezone=True), primary_key=True, nullable=False)
-    device_id = Column(Text, ForeignKey("devices.id"), primary_key=True, nullable=False)
-    metric = Column(Text, primary_key=True, nullable=False)
-    value = Column(Float, nullable=False)
-    unit = Column(Text)
-
-    __table_args__ = (Index("idx_telemetry_device_time", "device_id", "time"),)
-
-    def __repr__(self):
-        return f"<Telemetry(device={self.device_id}, metric={self.metric}, value={self.value})>"
