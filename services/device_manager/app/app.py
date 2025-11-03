@@ -158,14 +158,20 @@ async def revoke_device_certificate(device_id: str):
     """
     try:
         with get_db_context() as db:
+            # Get the active (non-revoked) certificate for the device
             device_cert = (
-                db.query(DeviceCertificate).filter(DeviceCertificate.device_id == device_id).first()
+                db.query(DeviceCertificate)
+                .filter(
+                    DeviceCertificate.device_id == device_id,
+                    DeviceCertificate.revoked_at.is_(None)
+                )
+                .first()
             )
             if not device_cert:
-                raise HTTPException(status_code=404, detail="Device certificate not found")
-
-            if device_cert.revoked_at:
-                raise HTTPException(status_code=400, detail="Certificate already revoked")
+                raise HTTPException(
+                    status_code=404, 
+                    detail="No active certificate found for this device"
+                )
 
             cert_manager.revoke_certificate(device_cert.certificate_pem)
 

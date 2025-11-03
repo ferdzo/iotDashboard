@@ -10,10 +10,15 @@ from datetime import datetime
 @dataclass
 class DeviceRegistrationResponse:
     device_id: str
-    certificate_id: str
-    certificate: str
-    private_key: str
-    ca_certificate: str
+    protocol: str
+    certificate_id: Optional[str] = None
+    ca_certificate_pem: Optional[str] = None
+    certificate_pem: Optional[str] = None
+    private_key_pem: Optional[str] = None
+    expires_at: Optional[datetime] = None
+    credential_id: Optional[str] = None
+    api_key: Optional[str] = None
+    webhook_secret: Optional[str] = None
 
 
 @dataclass
@@ -21,9 +26,9 @@ class DeviceInfo:
     id: str
     name: str
     location: Optional[str]
-    is_active: bool
+    protocol: str
+    connection_config: Optional[Dict[str, Any]]
     created_at: datetime
-    certificates: List[Dict[str, Any]]
 
 
 class DeviceManagerAPIError(Exception):
@@ -63,20 +68,33 @@ class DeviceManagerClient:
                 status_code=0, message=f"Connection error: {str(e)}"
             )
 
-    def register_device(self, name: str, location: Optional[str] = None) -> DeviceRegistrationResponse:
-        payload = {"name": name}
+    def register_device(
+        self, 
+        name: str, 
+        location: Optional[str] = None,
+        protocol: str = "mqtt",
+        connection_config: Optional[Dict[str, Any]] = None
+    ) -> DeviceRegistrationResponse:
+        payload = {"name": name, "protocol": protocol}
         if location:
             payload["location"] = location
+        if connection_config:
+            payload["connection_config"] = connection_config
 
         response = self._request("POST", "/devices/register", json=payload)
         data = response.json()
 
         return DeviceRegistrationResponse(
             device_id=data["device_id"],
-            certificate_id=data["certificate_id"],
-            certificate=data["certificate"],
-            private_key=data["private_key"],
-            ca_certificate=data["ca_certificate"],
+            protocol=data["protocol"],
+            certificate_id=data.get("certificate_id"),
+            ca_certificate_pem=data.get("ca_certificate_pem"),
+            certificate_pem=data.get("certificate_pem"),
+            private_key_pem=data.get("private_key_pem"),
+            expires_at=datetime.fromisoformat(data["expires_at"].replace("Z", "+00:00")) if data.get("expires_at") else None,
+            credential_id=data.get("credential_id"),
+            api_key=data.get("api_key"),
+            webhook_secret=data.get("webhook_secret"),
         )
 
     def get_device(self, device_id: str) -> DeviceInfo:
@@ -87,9 +105,9 @@ class DeviceManagerClient:
             id=data["id"],
             name=data["name"],
             location=data.get("location"),
-            is_active=data["is_active"],
+            protocol=data["protocol"],
+            connection_config=data.get("connection_config"),
             created_at=datetime.fromisoformat(data["created_at"].replace("Z", "+00:00")),
-            certificates=data.get("certificates", []),
         )
 
     def list_devices(self) -> List[DeviceInfo]:
@@ -101,11 +119,11 @@ class DeviceManagerClient:
                 id=device["id"],
                 name=device["name"],
                 location=device.get("location"),
-                is_active=device["is_active"],
+                protocol=device["protocol"],
+                connection_config=device.get("connection_config"),
                 created_at=datetime.fromisoformat(
                     device["created_at"].replace("Z", "+00:00")
                 ),
-                certificates=device.get("certificates", []),
             )
             for device in data
         ]
@@ -114,9 +132,22 @@ class DeviceManagerClient:
         response = self._request("POST", f"/devices/{device_id}/revoke")
         return response.json()
 
-    def renew_certificate(self, device_id: str) -> Dict[str, Any]:
+    def renew_certificate(self, device_id: str) -> DeviceRegistrationResponse:
         response = self._request("POST", f"/devices/{device_id}/renew")
-        return response.json()
+        data = response.json()
+        
+        return DeviceRegistrationResponse(
+            device_id=data["device_id"],
+            protocol=data["protocol"],
+            certificate_id=data.get("certificate_id"),
+            ca_certificate_pem=data.get("ca_certificate_pem"),
+            certificate_pem=data.get("certificate_pem"),
+            private_key_pem=data.get("private_key_pem"),
+            expires_at=datetime.fromisoformat(data["expires_at"].replace("Z", "+00:00")) if data.get("expires_at") else None,
+            credential_id=data.get("credential_id"),
+            api_key=data.get("api_key"),
+            webhook_secret=data.get("webhook_secret"),
+        )
 
     def get_ca_certificate(self) -> str:
         response = self._request("GET", "/ca_certificate")
@@ -137,8 +168,13 @@ class DeviceManagerClient:
 default_client = DeviceManagerClient()
 
 
-def register_device(name: str, location: Optional[str] = None) -> DeviceRegistrationResponse:
-    return default_client.register_device(name, location)
+def register_device(
+    name: str, 
+    location: Optional[str] = None,
+    protocol: str = "mqtt",
+    connection_config: Optional[Dict[str, Any]] = None
+) -> DeviceRegistrationResponse:
+    return default_client.register_device(name, location, protocol, connection_config)
 
 
 def get_device(device_id: str) -> DeviceInfo:

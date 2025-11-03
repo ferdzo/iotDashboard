@@ -21,18 +21,25 @@ from iotDashboard import views
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("devices_api/", views.devices_api),
+    
+    # Main dashboard
     path("", views.chart, name="index"),
-    path("fetch_device_data/", views.fetch_device_data, name="fetch_device_data"),
+    path("chart/", views.chart, name="chart"),
+    
+    # Device management
     path("devices/", views.device_list, name="device_list"),
     path("devices/add/", views.add_device, name="add_device"),
-    path("devices/edit/<int:pk>/", views.edit_device, name="edit_device"),
-    path("devices/delete/<int:pk>/", views.delete_device, name="delete_device"),
+    path("devices/<str:device_id>/", views.view_device, name="view_device"),
+    path("devices/<str:device_id>/delete/", views.delete_device, name="delete_device"),
+    
+    # Certificate management (MQTT devices only)
+    path("devices/<str:device_id>/certificate/revoke/", views.revoke_certificate, name="revoke_certificate"),
+    path("devices/<str:device_id>/certificate/renew/", views.renew_certificate, name="renew_certificate"),
+    
+    # Telemetry data API
+    path("fetch_device_data/", views.fetch_device_data, name="fetch_device_data"),
+    
+    # Legacy/utility endpoints
+    path("devices_api/", views.devices_api, name="devices_api"),
     path("logout/", views.logout_view, name="logout"),
-    path("sensors/<int:device_id>/", views.sensor_list, name="sensor_list"),
-    path("sensor/add/", views.add_sensor_with_type, name="add_sensor_with_type"),
-    # path('devices/<int:device_id>/sensors/', views.sensor_list, name='sensor_list'),
-    path("device/<int:device_id>/add_sensor/", views.add_sensor, name="add_sensor"),
-    path("sensor/edit/<int:pk>/", views.edit_sensor, name="edit_sensor"),
-    path("sensor/delete/<int:pk>/", views.delete_sensor, name="delete_sensor"),
 ]

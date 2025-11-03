@@ -23,40 +23,42 @@
 </nav>
 
     <div class="container mt-5">
-        <h1 class="text-center mb-4">{% if form.instance.pk %}Edit{% else %}Add{% endif %} Device</h1>
+        <h1 class="text-center mb-4">Add New Device</h1>
+
+        {% if messages %}
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            {% endfor %}
+        {% endif %}
 
         <form method="post">
             {% csrf_token %}
             <div class="mb-3">
-                <!-- Display the form fields -->
-                {{ form.name.label_tag }} {{ form.name }}<br>
-                {{ form.ip.label_tag }} {{ form.ip }}<br>
-                {{ form.protocol.label_tag }} {{ form.protocol }}<br>
-
-                <!-- If there are errors, display them -->
-                {% if form.errors %}
-                    <div class="alert alert-danger">
-                        <ul>
-                            {% for field, errors in form.errors.items %}
-                                <li>{{ field }}: {{ errors|join:", " }}</li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-                {% endif %}
+                <label for="name" class="form-label">Device Name *</label>
+                <input type="text" class="form-control" id="name" name="name" value="{{ name }}" required>
+            </div>
+            
+            <div class="mb-3">
+                <label for="location" class="form-label">Location</label>
+                <input type="text" class="form-control" id="location" name="location" value="{{ location }}">
+            </div>
+            
+            <div class="mb-3">
+                <label for="protocol" class="form-label">Protocol *</label>
+                <select class="form-select" id="protocol" name="protocol" required>
+                    <option value="mqtt" {% if protocol == 'mqtt' %}selected{% endif %}>MQTT (with mTLS)</option>
+                    <option value="http" {% if protocol == 'http' %}selected{% endif %}>HTTP (coming soon)</option>
+                    <option value="webhook" {% if protocol == 'webhook' %}selected{% endif %}>Webhook (coming soon)</option>
+                </select>
+                <div class="form-text">MQTT devices will receive X.509 certificates for secure communication.</div>
             </div>
 
-            <!-- Submit and Cancel buttons -->
-            <button type="submit" class="btn btn-success">Save</button>
+            <button type="submit" class="btn btn-success">Register Device</button>
             <a href="{% url 'device_list' %}" class="btn btn-secondary">Cancel</a>
         </form>
-
-        <!-- Links for adding/editing sensors for this specific device -->
-        <div class="mt-4">
-            {% if form.instance.pk %}
-                <a href="{% url 'add_sensor' form.instance.pk %}" class="btn btn-primary">Add Sensor</a>
-                <a href="{% url 'sensor_list' form.instance.pk %}" class="btn btn-info">Edit Sensors</a>
-            {% endif %}
-        </div>
     </div>
 </body>
 </html>
