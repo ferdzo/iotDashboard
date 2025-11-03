@@ -152,12 +152,14 @@ class DeviceCredential(models.Model):
 
 
 class Telemetry(models.Model):
-    """Time-series telemetry data from devices."""
+    """Time-series telemetry data from devices.
+    
+    Note: This table has a composite primary key (time, device_id, metric).
+    We mark time as primary_key to prevent Django from adding an 'id' field.
+    """
 
-    time = models.DateTimeField()
-    device = models.ForeignKey(
-        Device, on_delete=models.CASCADE, related_name="telemetry", db_column="device_id"
-    )
+    time = models.DateTimeField(primary_key=True)
+    device_id = models.CharField(max_length=8, db_column="device_id")
     metric = models.CharField(max_length=255)
     value = models.FloatField()
     unit = models.CharField(max_length=50, null=True, blank=True)
@@ -165,11 +167,25 @@ class Telemetry(models.Model):
     class Meta:
         managed = False
         db_table = "telemetry"
-        unique_together = [["time", "device", "metric"]]
+        # Django doesn't support composite PKs, so we can't specify all three
+        # The actual table has (time, device_id, metric) as composite PK
         indexes = [
-            models.Index(fields=["device", "time"]),
+            models.Index(fields=["device_id", "time"]),
         ]
 
     def __str__(self):
-        return f"{self.device.name} - {self.metric}: {self.value} at {self.time}"
+        return f"{self.device_id} - {self.metric}: {self.value} at {self.time}"
+    
+    @property
+    def device(self):
+        """Lazy load device if needed."""
+        if not hasattr(self, '_device_cache'):
+            self._device_cache = Device.objects.filter(id=self.device_id).first()
+        return self._device_cache
+    
+    @property
+    def device_name(self):
+        """Get device name without full object load."""
+        device = self.device
+        return device.name if device else self.device_id
 

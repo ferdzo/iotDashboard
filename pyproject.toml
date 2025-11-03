@@ -7,6 +7,10 @@ requires-python = ">=3.13"
 dependencies = [
     "alembic>=1.17.0",
     "django>=5.2.7",
+    "django-cors-headers>=4.9.0",
+    "django-rest>=0.8.7",
+    "djangorestframework>=3.16.1",
+    "djangorestframework-simplejwt>=5.5.1",
     "openai>=2.6.1",
     "paho-mqtt>=2.1.0",
     "psycopg2-binary>=2.9.11",
