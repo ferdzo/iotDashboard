@@ -1,4 +1,4 @@
-import openai
+from openai import OpenAI
 
 from config import API_KEY, MODEL_NAME, PROVIDER_NAME, HOST_URL, LOG_LEVEL
 import logging
@@ -14,9 +14,7 @@ class GPTService:
         self.logger = logging.getLogger(__name__)
 
         if self.provider_name == "openai":
-            openai.api_key = self.api_key
-            if self.host_url:
-                openai.api_base = self.host_url
+            self.client = OpenAI(api_key=self.api_key)
             self.logger.info(f"Initialized OpenAI GPTService with model {self.model_name}")
         else:
             self.logger.error(f"Unsupported provider: {self.provider_name}")

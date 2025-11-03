@@ -228,7 +228,6 @@ async def renew_certificate(device_id: str):
                 db.query(DeviceCertificate)
                 .filter(
                     DeviceCertificate.device_id == device_id,
-                    # DeviceCertificate.revoked_at.is_(None)
                 )
                 .first()
             )

@@ -38,7 +38,6 @@ class DatabaseWriter:
 
         session = self.SessionLocal()
         try:
-            # Convert dataclass readings to SQLAlchemy Telemetry objects
             db_objects = [
                 Telemetry(
                     time=reading.time,
@@ -50,7 +49,6 @@ class DatabaseWriter:
                 for reading in readings
             ]
 
-            # Bulk insert
             session.bulk_save_objects(db_objects)
             session.commit()
 
