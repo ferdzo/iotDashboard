@@ -49,14 +49,14 @@ export default function TelemetryTrendCard({ title, data, unit, accentColor = '#
                 <XAxis
                   dataKey="time"
                   tickFormatter={formatTimeLabel}
-                  tick={{ fontSize: 12 }}
-                  stroke="hsl(var(--bc) / 0.3)"
+                  tick={{ fontSize: 12, fill: '#ffffff' }}
+                  stroke="rgba(255, 255, 255, 0.3)"
                 />
                 <YAxis
                   tickFormatter={(val) => formatValue(val, unit)}
                   width={48}
-                  tick={{ fontSize: 12 }}
-                  stroke="hsl(var(--bc) / 0.3)"
+                  tick={{ fontSize: 12, fill: '#ffffff' }}
+                  stroke="rgba(255, 255, 255, 0.3)"
                 />
                 <Tooltip
                   formatter={(value: number) => formatValue(value, unit)}

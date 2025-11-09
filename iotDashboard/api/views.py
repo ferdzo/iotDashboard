@@ -2,24 +2,22 @@
 
 from datetime import timedelta
 from django.utils import timezone
-from django.db.models import Q, Count
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from asgiref.sync import async_to_sync
 
 from iotDashboard.models import Device, DeviceCertificate, Telemetry
 from iotDashboard.device_manager_client import (
     DeviceManagerClient, 
     DeviceManagerAPIError
 )
+from iotDashboard import gpt_service_client
 from .serializers import (
     DeviceSerializer,
     DeviceCreateSerializer,
-    DeviceCertificateSerializer,
     TelemetrySerializer,
     DashboardOverviewSerializer,
-    DeviceMetricsSerializer,
 )
 
 
@@ -247,6 +245,91 @@ class TelemetryViewSet(viewsets.ReadOnlyModelViewSet):
             .distinct()
         )
         return Response({'metrics': list(metrics)})
+    
+    @action(detail=False, methods=['post'])
+    def analyze(self, request):
+        """Analyze telemetry data using GPT service."""
+        # Parse request parameters
+        device_id = request.data.get('device_id')
+        metric = request.data.get('metric')
+        hours = int(request.data.get('hours', 24))
+        limit = int(request.data.get('limit', 100))
+        prompt_type = request.data.get('prompt_type', 'trend_summary')
+        custom_prompt = request.data.get('custom_prompt')
+        
+        # Validate device_id
+        if not device_id:
+            return Response(
+                {'error': 'device_id is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            device = Device.objects.get(id=device_id)
+        except Device.DoesNotExist:
+            return Response(
+                {'error': f'Device {device_id} not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Query telemetry data
+        queryset = Telemetry.objects.filter(
+            device_id=device_id,
+            time__gte=timezone.now() - timedelta(hours=hours)
+        )
+        
+        if metric:
+            queryset = queryset.filter(metric=metric)
+        
+        telemetry = queryset.order_by('-time')[:limit]
+        
+        if not telemetry:
+            return Response(
+                {'error': 'No telemetry data found for specified parameters'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Format data for GPT service
+        telemetry_data = [
+            {
+                'device_id': str(t.device_id),
+                'metric': t.metric,
+                'value': float(t.value),
+                'timestamp': t.time.isoformat()
+            }
+            for t in telemetry
+        ]
+        
+        # Device context
+        device_info = {
+            'name': device.name,
+            'location': device.location,
+            'protocol': device.protocol,
+        }
+        
+        # Call GPT service
+        try:
+            result = async_to_sync(gpt_service_client.analyze_telemetry)(
+                telemetry_data=telemetry_data,
+                device_info=device_info,
+                prompt_type=prompt_type,
+                custom_prompt=custom_prompt
+            )
+            return Response({
+                'analysis': result.analysis,
+                'prompt_type': result.prompt_type,
+                'data_points_analyzed': result.data_points_analyzed
+            })
+        
+        except gpt_service_client.GPTServiceError as e:
+            return Response(
+                {
+                    'error': e.message,
+                    'details': e.details,
+                    'gpt_service_available': False
+                },
+                status=e.status_code or status.HTTP_503_SERVICE_UNAVAILABLE
+            )
 
 
 class DashboardViewSet(viewsets.ViewSet):

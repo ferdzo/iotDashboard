@@ -3,6 +3,8 @@ The following concise instructions help AI coding agents become productive in th
 Purpose
 - This repo is a microservices-based IoT platform for device management, data ingestion, and telemetry storage. The system uses MQTT with mTLS authentication, Redis streams for message queuing, and PostgreSQL/TimescaleDB for persistent storage.
 
+Never forget to involve human developers for more complex tasks and decisions. You are encouraged to ask more.
+
 Big Picture
 - Architecture: Device → MQTT (mTLS) → mqtt_ingestion → Redis → db_write → PostgreSQL/TimescaleDB
 - Components:

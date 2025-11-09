@@ -8,14 +8,6 @@ from iotDashboard.device_manager_client import DeviceManagerClient, DeviceManage
 
 device_manager = DeviceManagerClient()
 
-
-# def index(request):
-#     """Redirect to chart page."""
-#     if request.user.is_authenticated:
-#         return redirect("/chart/")
-#     return HttpResponse("NOT AUTHENTICATED!!!")
-
-
 def chart(request):
     """Main dashboard showing telemetry charts."""
     try:
@@ -261,3 +253,95 @@ def devices_api(request):
     """JSON API endpoint for devices."""
     devices = list(Device.objects.all().values("id", "name", "protocol", "location"))
     return JsonResponse(devices, safe=False)
+
+def analyze_data(request):
+    """Calling the GPT Service to analyze the data."""
+    from asgiref.sync import async_to_sync
+    from iotDashboard import gpt_service_client
+    from datetime import timedelta
+    from django.utils import timezone
+    
+    if request.method != "POST":
+        return JsonResponse({"error": "POST method required"}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+    
+    # Parse parameters
+    device_id = data.get('device_id')
+    metric = data.get('metric')
+    hours = int(data.get('hours', 24))
+    limit = int(data.get('limit', 100))
+    prompt_type = data.get('prompt_type', 'trend_summary')
+    custom_prompt = data.get('custom_prompt')
+    
+    # Validate device_id
+    if not device_id:
+        return JsonResponse({"error": "device_id is required"}, status=400)
+    
+    try:
+        device = Device.objects.get(id=device_id)
+    except Device.DoesNotExist:
+        return JsonResponse({"error": f"Device {device_id} not found"}, status=404)
+    
+    # Query telemetry data
+    queryset = Telemetry.objects.filter(
+        device_id=device_id,
+        time__gte=timezone.now() - timedelta(hours=hours)
+    )
+    
+    if metric:
+        queryset = queryset.filter(metric=metric)
+    
+    telemetry = queryset.order_by('-time')[:limit]
+    
+    if not telemetry:
+        return JsonResponse(
+            {"error": "No telemetry data found for specified parameters"},
+            status=404
+        )
+    
+    # Format data for GPT service
+    telemetry_data = [
+        {
+            'device_id': str(t.device_id),
+            'metric': t.metric,
+            'value': float(t.value),
+            'timestamp': t.time.isoformat()
+        }
+        for t in telemetry
+    ]
+    
+    # Device context
+    device_info = {
+        'name': device.name,
+        'location': device.location,
+        'protocol': device.protocol,
+    }
+    
+    # Call GPT service
+    try:
+        result = async_to_sync(gpt_service_client.analyze_telemetry)(
+            telemetry_data=telemetry_data,
+            device_info=device_info,
+            prompt_type=prompt_type,
+            custom_prompt=custom_prompt
+        )
+        return JsonResponse({
+            'analysis': result.analysis,
+            'prompt_type': result.prompt_type,
+            'data_points_analyzed': result.data_points_analyzed
+        })
+    
+    except gpt_service_client.GPTServiceError as e:
+        return JsonResponse(
+            {
+                'error': e.message,
+                'details': e.details,
+                'gpt_service_available': False
+            },
+            status=e.status_code or 503
+        )
+    

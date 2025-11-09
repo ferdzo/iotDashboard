@@ -59,6 +59,19 @@ export const telemetryApi = {
     apiClient.get<PaginatedResponse<Telemetry>>('/telemetry/latest/', { params }),
   
   getMetrics: () => apiClient.get<{ metrics: string[] }>('/telemetry/metrics/'),
+  
+  analyze: (data: {
+    device_id: string;
+    metric?: string;
+    hours?: number;
+    limit?: number;
+    prompt_type?: 'anomaly_detection' | 'trend_summary' | 'custom';
+    custom_prompt?: string;
+  }) => apiClient.post<{
+    analysis: string;
+    prompt_type: string;
+    data_points_analyzed: number;
+  }>('/telemetry/analyze/', data),
 };
 
 // Dashboard API

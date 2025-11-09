@@ -1,401 +1,198 @@
-import { useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { dashboardApi, telemetryApi } from '../api'
-import TelemetryTrendCard from '../components/dashboard/TelemetryTrendCard'
-import type { DashboardOverview, Telemetry } from '../types/api'
-
-type TelemetryQueryResult = Telemetry[] | { results?: Telemetry[] }
-
-type MetricSummary = {
-	metricKey: string
-	label: string
-	unit?: string
-	samples: Array<{ time: string; value: number }>
-	latest?: { time: string; value: number }
-	earliest?: { time: string; value: number }
-	average: number
-	change?: number
-	count: number
-}
+import { useState, useRef, useEffect } from 'react'
+import GridLayout from 'react-grid-layout'
+import 'react-grid-layout/css/styles.css'
+import { useDashboardConfig } from '../hooks'
+import { WidgetContainer } from '../components/widgets'
+import AddWidgetModal from '../components/AddWidgetModal'
+import EditWidgetModal from '../components/EditWidgetModal'
 
 export default function Dashboard() {
-	const {
-		data: overview,
-		isLoading: overviewLoading,
-		isFetching: overviewFetching,
-		refetch: refetchOverview,
-	} = useQuery({
-		queryKey: ['dashboard', 'overview'],
-		queryFn: async (): Promise<DashboardOverview> => {
-			const response = await dashboardApi.getOverview()
-			return response.data
-		},
-		refetchInterval: 5000,
-	})
+	const { config, addWidget, removeWidget, updateWidget, exportConfig, importConfig } = useDashboardConfig()
+	const [isModalOpen, setIsModalOpen] = useState(false)
+	const [editingWidget, setEditingWidget] = useState<string | null>(null)
+	const [gridWidth, setGridWidth] = useState(1200)
+	const gridContainerRef = useRef<HTMLDivElement>(null)
 
-	const {
-		data: telemetryFeed,
-		isLoading: telemetryLoading,
-		isFetching: telemetryFetching,
-		refetch: refetchTelemetry,
-	} = useQuery({
-		queryKey: ['telemetry', 'feed', { page_size: 200 }],
-		queryFn: async (): Promise<TelemetryQueryResult> => {
-			const response = await telemetryApi.query({ page_size: 200 })
-			return response.data
-		},
-		refetchInterval: 15000,
-	})
-
-	const telemetrySamples = useMemo<Telemetry[]>(() => {
-		if (!telemetryFeed) {
-			return []
+	// Update grid width on resize
+	useEffect(() => {
+		const updateWidth = () => {
+			if (gridContainerRef.current) {
+				setGridWidth(gridContainerRef.current.offsetWidth)
+			}
 		}
 
-		if (Array.isArray(telemetryFeed)) {
-			return telemetryFeed
-		}
+		updateWidth()
+		window.addEventListener('resize', updateWidth)
+		return () => window.removeEventListener('resize', updateWidth)
+	}, [])
 
-		const maybeResults = telemetryFeed.results
-		if (Array.isArray(maybeResults)) {
-			return maybeResults
-		}
-
-		return []
-	}, [telemetryFeed])
-
-	const metricSummaries = useMemo<MetricSummary[]>(() => {
-		if (!telemetrySamples.length) {
-			return []
-		}
-
-		const groups = new Map<string, MetricSummary>()
-
-		telemetrySamples.forEach((sample) => {
-			const metricKey = sample.metric.toLowerCase()
-			if (!groups.has(metricKey)) {
-				const label = sample.metric
-					.replace(/_/g, ' ')
-					.replace(/\b\w/g, (char) => char.toUpperCase())
-
-				groups.set(metricKey, {
-					metricKey,
-					label,
-					unit: sample.unit,
-					samples: [],
-					average: 0,
-					count: 0,
+	const handleLayoutChange = (newLayout: GridLayout.Layout[]) => {
+		// Update widget positions when layout changes
+		newLayout.forEach((item) => {
+			const widget = config.widgets.find((w) => w.id === item.i)
+			if (widget) {
+				updateWidget(item.i, {
+					position: {
+						x: item.x,
+						y: item.y,
+						w: item.w,
+						h: item.h,
+					},
 				})
 			}
-
-			groups.get(metricKey)!.samples.push({ time: sample.time, value: sample.value })
 		})
-
-		return Array.from(groups.values())
-			.map((group) => {
-				const ordered = [...group.samples].sort(
-					(a, b) => new Date(a.time).getTime() - new Date(b.time).getTime(),
-				)
-
-				const total = ordered.reduce((acc, cur) => acc + Number(cur.value), 0)
-				const average = total / ordered.length
-				const latest = ordered.at(-1)
-				const earliest = ordered[0]
-				const change = latest && earliest ? latest.value - earliest.value : undefined
-
-				return {
-					...group,
-					samples: ordered,
-					latest,
-					earliest,
-					average,
-					change,
-					count: ordered.length,
-				}
-			})
-			.sort((a, b) => b.count - a.count)
-	}, [telemetrySamples])
-
-	const primaryMetric = useMemo<MetricSummary | undefined>(() => {
-			if (!metricSummaries.length) {
-				return undefined
-			}
-
-			const prefersTrend = metricSummaries.find(
-				(metric) => metric.count > 1 && metric.metricKey.includes('temp'),
-			)
-
-			if (prefersTrend) {
-				return prefersTrend
-			}
-
-			const anyWithTrend = metricSummaries.find((metric) => metric.count > 1)
-			if (anyWithTrend) {
-				return anyWithTrend
-			}
-
-			return metricSummaries[0]
-		}, [metricSummaries])
-
-	const isLoading = overviewLoading && telemetryLoading
-
-	const formatValue = (value?: number, unit?: string) => {
-		if (value === undefined || Number.isNaN(value)) {
-			return '—'
-		}
-
-		const rounded = Number.isInteger(value) ? value : Number(value.toFixed(1))
-		return unit ? `${rounded} ${unit}` : `${rounded}`
 	}
 
-	if (isLoading) {
-		return (
-			<div className="flex items-center justify-center min-h-screen">
-				<span className="loading loading-spinner loading-lg"></span>
-			</div>
-		)
+	const layout = config.widgets.map((widget) => ({
+		i: widget.id,
+		x: widget.position?.x || 0,
+		y: widget.position?.y || 0,
+		w: widget.position?.w || 1,
+		h: widget.position?.h || 2,
+		minW: 1,
+		minH: 1,
+		maxW: 4,
+	}))
+
+	const handleExport = () => {
+		const json = exportConfig()
+		const blob = new Blob([json], { type: 'application/json' })
+		const url = URL.createObjectURL(blob)
+		const a = document.createElement('a')
+		a.href = url
+		a.download = `dashboard-config-${new Date().toISOString().split('T')[0]}.json`
+		a.click()
+		URL.revokeObjectURL(url)
+	}
+
+	const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const file = e.target.files?.[0]
+		if (!file) return
+		const reader = new FileReader()
+		reader.onload = (event) => {
+			try {
+				const text = event.target?.result as string
+				const parsed = JSON.parse(text)
+				importConfig(parsed)
+				alert('Dashboard configuration imported successfully!')
+			} catch (error) {
+				alert('Failed to import configuration')
+				console.error(error)
+			}
+		}
+		reader.readAsText(file)
 	}
 
 	return (
-		<div className="p-6 space-y-10">
+		<div className="p-6 space-y-6">
 			<div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
 				<div>
-					<h1 className="text-3xl font-bold">Environment Overview</h1>
+					<h1 className="text-3xl font-bold">Dashboard</h1>
 					<p className="text-base-content/70">
-						Live snapshot of workplace telemetry and system health. Focus on environmental
-						trends—device controls are just a click away.
+						Customize your view with modular widgets
 					</p>
 				</div>
-				<button
-					className="btn btn-outline btn-sm w-full sm:w-auto"
-					onClick={() => {
-						refetchOverview()
-						refetchTelemetry()
-					}}
-					disabled={overviewFetching || telemetryFetching}
-				>
-					{overviewFetching || telemetryFetching ? (
-						<span className="loading loading-spinner loading-xs"></span>
-					) : (
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							className="h-4 w-4"
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke="currentColor"
-						>
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								strokeWidth={2}
-								d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9M20 20v-5h-.581m-15.357-2a8.003 8.003 0 0115.357 2"
-							/>
+				<div className="flex gap-2">
+					<button
+						className="btn btn-outline btn-sm"
+						onClick={handleExport}
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
 						</svg>
-					)}
-					<span className="ml-2">Refresh</span>
-				</button>
+						Export
+					</button>
+					<label className="btn btn-outline btn-sm">
+						<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+						</svg>
+						Import
+						<input
+							type="file"
+							accept="application/json"
+							className="hidden"
+							onChange={handleImport}
+						/>
+					</label>
+					<button
+						className="btn btn-primary btn-sm"
+						onClick={() => setIsModalOpen(true)}
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+						</svg>
+						Add Widget
+					</button>
+				</div>
 			</div>
 
-			{/* Environmental Snapshot */}
-			<section className="space-y-4">
-				<h2 className="text-xl font-semibold">Environmental Snapshot</h2>
-				{telemetryLoading && !metricSummaries.length ? (
-					<div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-						{[1, 2, 3].map((key) => (
-							<div key={key} className="card bg-base-200 animate-pulse">
-								<div className="card-body h-32"></div>
-							</div>
-						))}
-					</div>
-				) : metricSummaries.length ? (
-					<div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-						{metricSummaries.slice(0, 3).map((metric) => (
-							<div key={metric.metricKey} className="card bg-base-100 shadow">
-								<div className="card-body">
-									<div className="text-sm uppercase tracking-wide text-base-content/60">
-										{metric.label}
-									</div>
-									<div className="text-4xl font-bold text-primary">
-										{formatValue(metric.latest?.value, metric.unit)}
-									</div>
-									<div className="flex items-center justify-between text-sm text-base-content/60">
-										<span>Avg (last {metric.count})</span>
-										<span>{formatValue(metric.average, metric.unit)}</span>
-									</div>
-									{metric.change !== undefined && metric.change !== 0 && (
-										<div
-											className={`text-sm font-medium ${
-												metric.change > 0 ? 'text-warning' : 'text-success'
-											}`}
-										>
-											{metric.change > 0 ? '+' : ''}
-											{formatValue(metric.change, metric.unit)} since first sample
-										</div>
-									)}
-								</div>
-							</div>
-						))}
-					</div>
-				) : (
-					<div className="card bg-base-200">
-						<div className="card-body text-sm text-base-content/70">
-							No telemetry ingested yet. Connect devices or publish MQTT data to see environmental metrics.
-						</div>
-					</div>
-				)}
-			</section>
-
-			{/* Featured Trend */}
-			{primaryMetric && (
-				<section className="space-y-4">
-					<h2 className="text-xl font-semibold">Featured Trend</h2>
-					<TelemetryTrendCard
-						title={primaryMetric.label}
-						data={primaryMetric.samples}
-						unit={primaryMetric.unit}
-						subtitle={`Latest ${primaryMetric.count} readings`}
-					/>
-				</section>
-			)}
-
-			{/* Stats Grid */}
-			<section className="space-y-4">
-				<h2 className="text-xl font-semibold">System Health</h2>
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-					<div className="stats shadow">
-						<div className="stat">
-							<div className="stat-figure text-primary">
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									fill="none"
-									viewBox="0 0 24 24"
-									className="inline-block w-8 h-8 stroke-current"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth="2"
-										d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-									/>
-								</svg>
-							</div>
-							<div className="stat-title">Total Devices</div>
-							<div className="stat-value text-primary">{overview?.total_devices ?? 0}</div>
-							<div className="stat-desc">Registered in system</div>
-						</div>
-					</div>
-
-					<div className="stats shadow">
-						<div className="stat">
-							<div className="stat-figure text-success">
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									fill="none"
-									viewBox="0 0 24 24"
-									className="inline-block w-8 h-8 stroke-current"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth="2"
-										d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-									/>
-								</svg>
-							</div>
-							<div className="stat-title">Active Devices</div>
-							<div className="stat-value text-success">{overview?.active_devices ?? 0}</div>
-							<div className="stat-desc">Currently online</div>
-						</div>
-					</div>
-
-					<div className="stats shadow">
-						<div className="stat">
-							<div className="stat-figure text-secondary">
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									fill="none"
-									viewBox="0 0 24 24"
-									className="inline-block w-8 h-8 stroke-current"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth="2"
-										d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-15.857 21.213 0"
-									/>
-								</svg>
-							</div>
-							<div className="stat-title">MQTT Devices</div>
-							<div className="stat-value text-secondary">{overview?.mqtt_devices ?? 0}</div>
-							<div className="stat-desc">Using mTLS</div>
-						</div>
-					</div>
-
-					<div className="stats shadow">
-						<div className="stat">
-							<div className="stat-figure text-warning">
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									fill="none"
-									viewBox="0 0 24 24"
-									className="inline-block w-8 h-8 stroke-current"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth="2"
-										d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-									/>
-								</svg>
-							</div>
-							<div className="stat-title">Expiring Soon</div>
-							<div className="stat-value text-warning">
-								{overview?.certificates_expiring_soon ?? 0}
-							</div>
-							<div className="stat-desc">Certificates need renewal</div>
-						</div>
+			{config.widgets.length === 0 ? (
+				<div className="card bg-base-200 shadow-lg">
+					<div className="card-body items-center text-center py-16">
+						<svg xmlns="http://www.w3.org/2000/svg" className="h-24 w-24 text-base-content/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+						</svg>
+						<h2 className="text-2xl font-bold mt-4">No Widgets Yet</h2>
+						<p className="text-base-content/60 max-w-md">
+							Get started by adding your first widget. Choose from line charts, stat cards, gauges, or AI insights.
+						</p>
+						<button
+							className="btn btn-primary mt-6"
+							onClick={() => setIsModalOpen(true)}
+						>
+							<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+							</svg>
+							Add Your First Widget
+						</button>
 					</div>
 				</div>
-			</section>
+			) : (
+				<div className="w-full" ref={gridContainerRef}>
+					<GridLayout
+						className="layout"
+						layout={layout}
+						cols={4}
+						rowHeight={150}
+						width={gridWidth}
+						onLayoutChange={handleLayoutChange}
+						draggableHandle=".drag-handle"
+						compactType="vertical"
+						preventCollision={false}
+						isResizable={true}
+						isDraggable={true}
+					>
+						{config.widgets.map((widget) => (
+							<div key={widget.id}>
+								<WidgetContainer
+									config={widget}
+									onRemove={() => removeWidget(widget.id)}
+									onEdit={() => setEditingWidget(widget.id)}
+								/>
+							</div>
+						))}
+					</GridLayout>
+				</div>
+			)}
 
-			{/* Recent Telemetry */}
-			{overview?.recent_telemetry?.length ? (
-				<section className="space-y-4">
-					<h2 className="text-2xl font-bold">Recent Telemetry</h2>
-					<div className="overflow-x-auto">
-						<table className="table table-zebra">
-							<thead>
-								<tr>
-									<th>Device</th>
-									<th>Metric</th>
-									<th>Value</th>
-									<th>Time</th>
-								</tr>
-							</thead>
-							<tbody>
-								{overview.recent_telemetry.map((t, idx) => (
-									<tr key={`${t.device_id}-${t.metric}-${idx}`} className="hover">
-										<td>
-											<div className="font-bold">{t.device_name}</div>
-											<div className="text-sm opacity-50">{t.device_id}</div>
-										</td>
-										<td>
-											<div className="badge badge-ghost">{t.metric}</div>
-										</td>
-										<td className="font-mono font-semibold">
-											{formatValue(t.value, t.unit)}
-										</td>
-										<td className="text-sm opacity-70">
-											{new Date(t.time).toLocaleString()}
-										</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
-					</div>
-				</section>
-			) : null}
+			<AddWidgetModal
+				isOpen={isModalOpen}
+				onClose={() => setIsModalOpen(false)}
+				onAdd={(widget) => {
+					addWidget(widget)
+					setIsModalOpen(false)
+				}}
+			/>
+
+			<EditWidgetModal
+				isOpen={editingWidget !== null}
+				widget={config.widgets.find((w) => w.id === editingWidget) || null}
+				onClose={() => setEditingWidget(null)}
+				onSave={(widgetId, updates) => {
+					updateWidget(widgetId, updates)
+					setEditingWidget(null)
+				}}
+			/>
 		</div>
 	)
 }
-
