@@ -1,5 +1,6 @@
 """DRF ViewSets for IoT Dashboard API."""
 
+import requests
 from datetime import timedelta
 from django.utils import timezone
 from rest_framework import viewsets, status
@@ -13,6 +14,7 @@ from iotDashboard.device_manager_client import (
     DeviceManagerAPIError
 )
 from iotDashboard import gpt_service_client
+from iotDashboard import weather_client
 from .serializers import (
     DeviceSerializer,
     DeviceCreateSerializer,
@@ -58,6 +60,7 @@ class DeviceViewSet(viewsets.ModelViewSet):
                 'certificate_pem': response.certificate_pem,
                 'private_key_pem': response.private_key_pem,
                 'expires_at': response.expires_at.isoformat() if response.expires_at else None,
+                'onboarding_token': response.onboarding_token,  # One-time token for QR code
             }, status=status.HTTP_201_CREATED)
         
         except DeviceManagerAPIError as e:
@@ -124,6 +127,44 @@ class DeviceViewSet(viewsets.ModelViewSet):
                 'private_key_pem': response.private_key_pem,
                 'expires_at': response.expires_at.isoformat() if response.expires_at else None,
             })
+        except DeviceManagerAPIError as e:
+            return Response(
+                {'error': e.message, 'details': e.details},
+                status=e.status_code or status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['get'])
+    def credentials(self, request, pk=None):
+        """
+        Fetch device credentials using one-time onboarding token.
+        Used by mobile apps after scanning QR code.
+        
+        Query params:
+            - token: One-time onboarding token from QR code
+        """
+        device_id = pk
+        token = request.query_params.get('token')
+        
+        if not token:
+            return Response(
+                {'error': 'token parameter is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            response = device_manager.get_device_credentials(device_id, token)
+            
+            # Return credentials
+            return Response({
+                'device_id': response.device_id,
+                'protocol': response.protocol,
+                'certificate_id': response.certificate_id,
+                'ca_certificate_pem': response.ca_certificate_pem,
+                'certificate_pem': response.certificate_pem,
+                'private_key_pem': response.private_key_pem,
+                'expires_at': response.expires_at.isoformat() if response.expires_at else None,
+            })
+        
         except DeviceManagerAPIError as e:
             return Response(
                 {'error': e.message, 'details': e.details},
@@ -384,3 +425,89 @@ class DashboardViewSet(viewsets.ViewSet):
         
         serializer = DashboardOverviewSerializer(data)
         return Response(serializer.data)
+
+
+class WeatherViewSet(viewsets.ViewSet):
+    """ViewSet for weather and air quality data."""
+    
+    @action(detail=False, methods=['get'])
+    def current(self, request):
+        """
+        Get current weather data by city name or coordinates.
+        
+        Query params:
+            - city: City name (e.g., "Skopje")
+            OR
+            - lat: Latitude
+            - lon: Longitude
+        """
+        city = request.query_params.get('city')
+        lat = request.query_params.get('lat')
+        lon = request.query_params.get('lon')
+        
+        try:
+            if city:
+                # Fetch by city name
+                weather_data = weather_client.get_weather_by_city(city)
+            elif lat and lon:
+                # Fetch by coordinates
+                latitude = float(lat)
+                longitude = float(lon)
+                raw_weather = weather_client.fetch_current_weather(latitude, longitude)
+                weather_data = weather_client.parse_weather_data(raw_weather)
+            else:
+                return Response(
+                    {'error': 'Either city or (lat, lon) parameters are required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            return Response(weather_data)
+        
+        except ValueError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except requests.RequestException as e:
+            return Response(
+                {'error': 'Failed to fetch weather data', 'details': str(e)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+    
+    @action(detail=False, methods=['get'])
+    def air_quality(self, request):
+        """
+        Get current air quality data for a city (Pulse.eco API).
+        
+        Query params:
+            - city: City name (e.g., "skopje", "bitola", "tetovo")
+        """
+        city = request.query_params.get('city')
+        
+        if not city:
+            return Response(
+                {'error': 'city parameter is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            raw_data = weather_client.get_air_quality(city)
+            parsed_data = weather_client.parse_air_quality_data(raw_data, city)
+            return Response(parsed_data)
+        
+        except requests.HTTPError as e:
+            if e.response.status_code == 404:
+                return Response(
+                    {'error': f'City "{city}" not found or not supported by Pulse.eco'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            return Response(
+                {'error': 'Failed to fetch air quality data', 'details': str(e)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+        except requests.RequestException as e:
+            return Response(
+                {'error': 'Failed to fetch air quality data', 'details': str(e)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+

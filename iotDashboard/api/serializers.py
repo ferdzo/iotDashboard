@@ -52,11 +52,9 @@ class DeviceCreateSerializer(serializers.Serializer):
 class TelemetrySerializer(serializers.ModelSerializer):
     """Serializer for telemetry data."""
     
-    device_name = serializers.ReadOnlyField()
-    
     class Meta:
         model = Telemetry
-        fields = ['time', 'device_id', 'device_name', 'metric', 'value', 'unit']
+        fields = ['time', 'device_id', 'metric', 'value', 'unit']
 
 
 class DeviceMetricsSerializer(serializers.Serializer):

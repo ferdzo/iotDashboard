@@ -19,6 +19,7 @@ class DeviceRegistrationResponse(BaseModel):
     certificate_pem: str | None = None
     private_key_pem: str | None = None
     expires_at: datetime.datetime | None = None
+    onboarding_token: str | None = None
     credential_id: str | None = None
     api_key: str | None = None
     webhook_secret: str | None = None

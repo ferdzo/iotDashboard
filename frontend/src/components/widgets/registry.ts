@@ -5,6 +5,8 @@ import LineChartWidget from './LineChartWidget'
 import StatWidget from './StatWidget'
 import GaugeWidget from './GaugeWidget'
 import AiInsightWidget from './AiInsightWidget'
+import AirQualityWidget from './AirQualityWidget'
+import WeatherWidget from './WeatherWidget'
 
 interface WidgetProps {
   config: WidgetConfig
@@ -16,4 +18,6 @@ export const widgetRegistry: Record<WidgetType, ComponentType<WidgetProps>> = {
   'gauge': GaugeWidget,
   'ai-insight': AiInsightWidget,
   'bar-chart': LineChartWidget, // Placeholder - implement later
+  'air-quality': AirQualityWidget,
+  'weather': WeatherWidget,
 }

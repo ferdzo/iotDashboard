@@ -11,7 +11,6 @@ dependencies = [
     "django-rest>=0.8.7",
     "djangorestframework>=3.16.1",
     "djangorestframework-simplejwt>=5.5.1",
-    "httpx>=0.28.1",
     "openai>=2.6.1",
     "paho-mqtt>=2.1.0",
     "psycopg2-binary>=2.9.11",

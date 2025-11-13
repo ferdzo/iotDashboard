@@ -41,7 +41,6 @@ urlpatterns = [
     
     # Telemetry data API
     path("fetch_device_data/", views.fetch_device_data, name="fetch_device_data"),
-    path("analyze_data/", views.analyze_data, name="analyze_data"),
     
     # Legacy/utility endpoints
     path("devices_api/", views.devices_api, name="devices_api"),

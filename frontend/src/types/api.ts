@@ -48,6 +48,7 @@ export interface DeviceRegistrationResponse {
   certificate_pem?: string;
   private_key_pem?: string;
   expires_at?: string;
+  onboarding_token?: string;  // One-time token for secure onboarding (valid 15 min)
 }
 
 export interface DashboardOverview {

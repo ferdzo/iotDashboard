@@ -17,8 +17,9 @@ export default function AddWidgetModal({ isOpen, onClose, onAdd }: AddWidgetModa
   const [selectedDevices, setSelectedDevices] = useState<string[]>([])
   const [selectedMetrics, setSelectedMetrics] = useState<string[]>([])
   const [timeframeHours, setTimeframeHours] = useState(24)
-  const [widgetWidth, setWidgetWidth] = useState(1) // Default to 1 column (small)
-  const [widgetHeight, setWidgetHeight] = useState(2) // Default to 2 rows (medium)
+  const [widgetWidth, setWidgetWidth] = useState(1)
+  const [widgetHeight, setWidgetHeight] = useState(2) 
+  const [city, setCity] = useState('Skopje') 
 
   // Fetch devices
   const { data: devicesData } = useQuery({
@@ -63,20 +64,31 @@ export default function AddWidgetModal({ isOpen, onClose, onAdd }: AddWidgetModa
   }, [selectedDevices])
 
   const handleSubmit = () => {
-    if (selectedDevices.length === 0 || selectedMetrics.length === 0) {
-      alert('Please select at least one device and one metric')
-      return
+    // Weather and air-quality widgets don't need device/metric validation
+    if (widgetType !== 'weather' && widgetType !== 'air-quality') {
+      if (selectedDevices.length === 0 || selectedMetrics.length === 0) {
+        alert('Please select at least one device and one metric')
+        return
+      }
     }
 
-    const selectedDevice = devices.find(d => d.id === selectedDevices[0])
-    const defaultTitle = createDefaultWidgetTitle(widgetType, selectedDevice?.name, selectedMetrics)
+    // Create title
+    let defaultTitle = ''
+    if (widgetType === 'weather') {
+      defaultTitle = `Weather - ${city}`
+    } else if (widgetType === 'air-quality') {
+      defaultTitle = `Air Quality - ${city}`
+    } else {
+      const selectedDevice = devices.find(d => d.id === selectedDevices[0])
+      defaultTitle = createDefaultWidgetTitle(widgetType, selectedDevice?.name, selectedMetrics)
+    }
 
     const newWidget: WidgetConfig = {
       id: `widget-${Date.now()}`,
       type: widgetType,
       title: title || defaultTitle,
-      deviceIds: selectedDevices,
-      metricIds: selectedMetrics,
+      deviceIds: widgetType === 'weather' || widgetType === 'air-quality' ? [] : selectedDevices,
+      metricIds: widgetType === 'weather' || widgetType === 'air-quality' ? [] : selectedMetrics,
       timeframe: {
         hours: timeframeHours,
       },
@@ -84,6 +96,7 @@ export default function AddWidgetModal({ isOpen, onClose, onAdd }: AddWidgetModa
         showLegend: true,
         showGrid: true,
         height: widgetType === 'line-chart' ? 300 : undefined,
+        city: widgetType === 'weather' || widgetType === 'air-quality' ? city : undefined,
       },
       position: {
         x: 0,
@@ -197,6 +210,32 @@ export default function AddWidgetModal({ isOpen, onClose, onAdd }: AddWidgetModa
                     <div className="text-xs opacity-70">GPT analysis</div>
                   </div>
                 </button>
+
+                <button
+                  className={`btn ${widgetType === 'weather' ? 'btn-primary' : 'btn-outline'} justify-start`}
+                  onClick={() => setWidgetType('weather')}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                  </svg>
+                  <div className="text-left">
+                    <div className="font-semibold">Weather</div>
+                    <div className="text-xs opacity-70">Open-Meteo</div>
+                  </div>
+                </button>
+
+                <button
+                  className={`btn ${widgetType === 'air-quality' ? 'btn-primary' : 'btn-outline'} justify-start`}
+                  onClick={() => setWidgetType('air-quality')}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                  </svg>
+                  <div className="text-left">
+                    <div className="font-semibold">Air Quality</div>
+                    <div className="text-xs opacity-70">Pulse.eco</div>
+                  </div>
+                </button>
               </div>
             </div>
 
@@ -204,7 +243,17 @@ export default function AddWidgetModal({ isOpen, onClose, onAdd }: AddWidgetModa
               <button className="btn btn-ghost" onClick={onClose}>
                 Cancel
               </button>
-              <button className="btn btn-primary" onClick={() => setStep(2)}>
+              <button 
+                className="btn btn-primary" 
+                onClick={() => {
+                  // Skip data source step for weather and air quality widgets
+                  if (widgetType === 'weather' || widgetType === 'air-quality') {
+                    setStep(3)
+                  } else {
+                    setStep(2)
+                  }
+                }}
+              >
                 Next
               </button>
             </div>
@@ -212,7 +261,7 @@ export default function AddWidgetModal({ isOpen, onClose, onAdd }: AddWidgetModa
         )}
 
         {/* Step 2: Data Source */}
-        {step === 2 && (
+        {step === 2 && widgetType !== 'weather' && widgetType !== 'air-quality' && (
           <div className="space-y-4">
             <div className="form-control">
               <label className="label">
@@ -304,35 +353,76 @@ export default function AddWidgetModal({ isOpen, onClose, onAdd }: AddWidgetModa
         {/* Step 3: Configure */}
         {step === 3 && (
           <div className="space-y-4">
-            <div className="form-control">
-              <label className="label">
-                <span className="label-text font-semibold">Widget Title (Optional)</span>
-              </label>
-              <input
-                type="text"
-                className="input input-bordered"
-                placeholder="Auto-generated if empty"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-            </div>
+            {/* City input for weather and air-quality widgets */}
+            {(widgetType === 'weather' || widgetType === 'air-quality') ? (
+              <>
+                <div className="form-control">
+                  <label className="label">
+                    <span className="label-text font-semibold">City</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="input input-bordered"
+                    placeholder="Enter city name (e.g., Skopje)"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                  />
+                  <label className="label">
+                    <span className="label-text-alt">
+                      {widgetType === 'air-quality' 
+                        ? 'Available cities: Skopje, Bitola, Veles, Tetovo, etc.' 
+                        : 'Enter any city name for weather data'}
+                    </span>
+                  </label>
+                </div>
 
-            <div className="form-control">
-              <label className="label">
-                <span className="label-text font-semibold">Time Range</span>
-              </label>
-              <select
-                className="select select-bordered"
-                value={timeframeHours}
-                onChange={(e) => setTimeframeHours(Number(e.target.value))}
-              >
-                <option value={1}>Last 1 hour</option>
-                <option value={6}>Last 6 hours</option>
-                <option value={24}>Last 24 hours</option>
-                <option value={168}>Last 7 days</option>
-                <option value={720}>Last 30 days</option>
-              </select>
-            </div>
+                <div className="form-control">
+                  <label className="label">
+                    <span className="label-text font-semibold">Widget Title (Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="input input-bordered"
+                    placeholder={widgetType === 'weather' ? `Weather - ${city}` : `Air Quality - ${city}`}
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                  />
+                </div>
+              </>
+            ) : (
+              // Original configuration for sensor-based widgets
+              <>
+                <div className="form-control">
+                  <label className="label">
+                    <span className="label-text font-semibold">Widget Title (Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="input input-bordered"
+                    placeholder="Auto-generated if empty"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-control">
+                  <label className="label">
+                    <span className="label-text font-semibold">Time Range</span>
+                  </label>
+                  <select
+                    className="select select-bordered"
+                    value={timeframeHours}
+                    onChange={(e) => setTimeframeHours(Number(e.target.value))}
+                  >
+                    <option value={1}>Last 1 hour</option>
+                    <option value={6}>Last 6 hours</option>
+                    <option value={24}>Last 24 hours</option>
+                    <option value={168}>Last 7 days</option>
+                    <option value={720}>Last 30 days</option>
+                  </select>
+                </div>
+              </>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="form-control">

@@ -78,7 +78,30 @@ class DeviceCredential(Base):
         return f"<DeviceCredential(id={self.id}, device_id={self.device_id}, type={self.credential_type})>"
 
 
-class Telemetry(Base):
+class DeviceOnboardingToken(Base):
+    """One-time tokens for secure device onboarding via QR code."""
+
+    __tablename__ = "device_onboarding_tokens"
+
+    token = Column(Text, primary_key=True)
+    device_id = Column(
+        Text, ForeignKey("devices.id", ondelete="CASCADE"), nullable=False
+    )
+    certificate_id = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True))
+
+    __table_args__ = (
+        Index("idx_onboarding_tokens_device_id", "device_id"),
+        Index("idx_onboarding_tokens_expires", "expires_at"),
+    )
+
+    def __repr__(self):
+        return f"<DeviceOnboardingToken(device_id={self.device_id}, used={self.used_at is not None})>"
+
+
+class   Telemetry(Base):
     """
     Time-series telemetry data from devices.
     """

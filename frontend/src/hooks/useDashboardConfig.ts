@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-export type WidgetType = 'line-chart' | 'gauge' | 'stat' | 'ai-insight' | 'bar-chart'
+export type WidgetType = 'line-chart' | 'gauge' | 'stat' | 'ai-insight' | 'bar-chart' | 'air-quality' | 'weather'
 
 export interface WidgetConfig {
   id: string
@@ -18,6 +18,7 @@ export interface WidgetConfig {
     showLegend?: boolean
     showGrid?: boolean
     height?: number
+    city?: string 
   }
   position?: {
     x: number

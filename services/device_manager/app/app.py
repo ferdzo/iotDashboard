@@ -1,12 +1,15 @@
 import datetime
 import logging
+import secrets
 
-from fastapi import FastAPI, HTTPException
+from cryptography import x509
+from fastapi import FastAPI, HTTPException, Query
 
 from app.cert_manager import CertificateManager
 from app.database import get_db_context
-from app.db_models import Device, DeviceCertificate
+from app.db_models import Device, DeviceCertificate, DeviceOnboardingToken
 from app.models import (
+    DeviceCertificateResponse,
     DeviceRegistrationRequest,
     DeviceRegistrationResponse,
     DeviceResponse,
@@ -61,6 +64,19 @@ async def register_device(
                 )
                 db.add(device_cert)
 
+                onboarding_token = secrets.token_urlsafe(32)
+                token_expires = datetime.datetime.now(datetime.UTC) + datetime.timedelta(minutes=15)
+
+                db_token = DeviceOnboardingToken(
+                    token=onboarding_token,
+                    device_id=cert_response.device_id,
+                    certificate_id=cert_response.certificate_id,
+                    created_at=datetime.datetime.now(datetime.UTC),
+                    expires_at=token_expires,
+                )
+                db.add(db_token)
+                db.commit()
+
             return DeviceRegistrationResponse(
                 device_id=cert_response.device_id,
                 protocol=request.protocol,
@@ -69,6 +85,7 @@ async def register_device(
                 certificate_pem=cert_response.certificate_pem,
                 private_key_pem=cert_response.private_key_pem,
                 expires_at=cert_response.expires_at,
+                onboarding_token=onboarding_token,
             )
 
         else:
@@ -97,6 +114,63 @@ async def get_ca_certificate() -> str:
     except Exception as e:
         logger.error(f"Failed to retrieve CA certificate: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to retrieve CA certificate.") from e
+
+
+@app.get("/devices/{device_id}/credentials")
+async def get_device_credentials(device_id: str, token: str = Query(...)) -> DeviceCertificateResponse:
+    """
+    Securely fetch device credentials using one-time token from QR code.
+    Token is valid for 15 minutes and can only be used once.
+    """
+    try:
+        with get_db_context() as db:
+            db_token = db.query(DeviceOnboardingToken).filter(
+                DeviceOnboardingToken.token == token,
+                DeviceOnboardingToken.device_id == device_id
+            ).first()
+
+            if not db_token:
+                raise HTTPException(status_code=404, detail="Invalid or expired onboarding token")
+
+            if db_token.used_at is not None:
+                raise HTTPException(status_code=403, detail="Token has already been used")
+
+            # Check if token expired
+            if datetime.datetime.now(datetime.UTC) > db_token.expires_at:
+                raise HTTPException(status_code=403, detail="Token has expired")
+
+            device_cert = db.query(DeviceCertificate).filter(
+                DeviceCertificate.id == db_token.certificate_id,
+                DeviceCertificate.device_id == device_id,
+                DeviceCertificate.revoked_at.is_(None)
+            ).first()
+
+            if not device_cert:
+                raise HTTPException(status_code=404, detail="Certificate not found or revoked")
+
+            db_token.used_at = datetime.datetime.now(datetime.UTC)
+            db.commit()
+
+            ca_cert_pem = cert_manager.get_ca_certificate_pem()
+
+            logger.info(f"Device {device_id} fetched credentials using onboarding token")
+
+            return DeviceCertificateResponse(
+                certificate_id=device_cert.id,
+                device_id=device_cert.device_id,
+                ca_certificate_pem=ca_cert_pem,
+                certificate_pem=device_cert.certificate_pem,
+                private_key_pem=device_cert.private_key_pem,
+                expires_at=device_cert.expires_at,
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to fetch credentials for device {device_id}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500, detail="Failed to fetch device credentials"
+        ) from e
 
 
 @app.get("/devices/{device_id}")
@@ -208,6 +282,34 @@ async def get_crl():
         logger.error(f"Failed to retrieve CRL: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to retrieve CRL.") from e
 
+@app.post("/devices/{device_id}/delete")
+async def delete_device(device_id: str):
+    """
+    Delete a device and its associated certificates from the database.
+    """
+    try:
+        with get_db_context() as db:
+            device = db.query(Device).filter(Device.id == device_id).first()
+            if not device:
+                raise HTTPException(status_code=404, detail="Device not found")
+
+            # Delete associated certificates
+            db.query(DeviceCertificate).filter(DeviceCertificate.device_id == device_id).delete()
+
+            # Delete the device
+            db.delete(device)
+            db.commit()
+
+            logger.info(f"Successfully deleted device {device_id} and its certificates")
+
+            return {"message": f"Device {device_id} and its certificates have been deleted."}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete device {device_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to delete device.") from e
+
 
 @app.post("/devices/{device_id}/renew")
 async def renew_certificate(device_id: str):
@@ -254,8 +356,6 @@ async def renew_certificate(device_id: str):
             )
 
             # Extract certificate ID (serial number) from the new certificate
-            from cryptography import x509
-
             new_cert = x509.load_pem_x509_certificate(new_cert_pem)
             new_cert_id = format(new_cert.serial_number, "x")
 
