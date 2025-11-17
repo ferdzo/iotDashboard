@@ -223,7 +223,9 @@ export default function LineChartWidget({ config }: LineChartWidgetProps) {
                 dataKey={metric}
                 stroke={colors[index % colors.length]}
                 strokeWidth={2}
-                dot={false}
+                dot={{ r: 2, strokeWidth: 0 }}
+                activeDot={{ r: 4 }}
+                connectNulls={true}
                 name={formatMetricName(metric)}
               />
             ))}

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import type { WidgetConfig } from '../../hooks'
 import { weatherApi } from '../../api'
+import './widget-styles.css'
 
 interface AirQualityWidgetProps {
   config: WidgetConfig
@@ -22,7 +23,7 @@ export default function AirQualityWidget({ config }: AirQualityWidgetProps) {
 
   if (isLoading) {
     return (
-      <div className="card bg-base-100 shadow-lg h-full">
+      <div className="widget-card card bg-base-100 h-full">
         <div className="card-body flex items-center justify-center">
           <span className="loading loading-spinner loading-lg"></span>
         </div>
@@ -32,9 +33,9 @@ export default function AirQualityWidget({ config }: AirQualityWidgetProps) {
 
   if (error) {
     return (
-      <div className="card bg-base-100 shadow-lg h-full">
+      <div className="widget-card card bg-base-100 h-full">
         <div className="card-body">
-          <h2 className="card-title text-sm">{config.title}</h2>
+          <h2 className="card-title text-sm truncate">{config.title}</h2>
           <div className="flex flex-col items-center justify-center flex-1">
             <p className="text-error text-sm text-center">
               Failed to load air quality data for {city}
@@ -73,14 +74,14 @@ export default function AirQualityWidget({ config }: AirQualityWidgetProps) {
   const pm25 = airQuality.measurements.pm25
 
   return (
-    <div className="card bg-base-100 shadow-lg h-full">
+    <div className="widget-card card bg-base-100 h-full">
       <div className="card-body">
-        <h2 className="card-title text-sm">{config.title}</h2>
+        <h2 className="card-title text-sm truncate">{config.title}</h2>
         <div className="flex flex-col items-center justify-center flex-1">
           {/* Air quality icon */}
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            className={`h-16 w-16 text-${statusColor} mb-2`}
+            className={`h-12 w-12 text-${statusColor} mb-1`}
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -94,28 +95,28 @@ export default function AirQualityWidget({ config }: AirQualityWidgetProps) {
           </svg>
 
           {/* PM Values */}
-          <div className="grid grid-cols-2 gap-4 w-full mb-3">
+          <div className="grid grid-cols-2 gap-2 w-full mb-2">
             {pm10 && (
               <div className="text-center">
-                <div className="text-2xl font-bold">{pm10.average.toFixed(1)}</div>
+                <div className="text-xl font-bold">{pm10.average.toFixed(1)}</div>
                 <div className="text-xs text-base-content/60">PM10 μg/m³</div>
               </div>
             )}
             {pm25 && (
               <div className="text-center">
-                <div className="text-2xl font-bold">{pm25.average.toFixed(1)}</div>
+                <div className="text-xl font-bold">{pm25.average.toFixed(1)}</div>
                 <div className="text-xs text-base-content/60">PM2.5 μg/m³</div>
               </div>
             )}
           </div>
 
           {/* AQI Status badge */}
-          <div className={`badge badge-${statusColor} badge-lg`}>
+          <div className={`badge badge-${statusColor} truncate max-w-full`}>
             {airQuality.status}
           </div>
 
           {/* Additional pollutants */}
-          <div className="grid grid-cols-2 gap-2 mt-3 w-full text-xs">
+          <div className="grid grid-cols-2 gap-2 mt-2 w-full text-xs">
             {Object.entries(airQuality.measurements).map(([pollutant, data]) => {
               if (pollutant === 'pm10' || pollutant === 'pm25') return null
               return (
@@ -128,8 +129,10 @@ export default function AirQualityWidget({ config }: AirQualityWidgetProps) {
           </div>
 
           {/* City and sensor count */}
-          <div className="text-xs text-base-content/40 mt-3">
-            {airQuality.city.charAt(0).toUpperCase() + airQuality.city.slice(1)} • {airQuality.sensor_count} sensors
+          <div className="text-xs text-base-content/40 mt-2 px-2 w-full overflow-hidden">
+            <div className="truncate text-center">
+              {airQuality.city.charAt(0).toUpperCase() + airQuality.city.slice(1)} • {airQuality.sensor_count} sensors
+            </div>
           </div>
         </div>
       </div>

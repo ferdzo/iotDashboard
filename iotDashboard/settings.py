@@ -33,6 +33,8 @@ POSTGRES_USER = os.getenv("POSTGRES_USER")
 POSTGRES_DB = os.getenv("POSTGRES_DB")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
 
+GPT_SERVICE_URL = os.getenv("GPT_SERVICE_URL", "http://localhost:8001")
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 

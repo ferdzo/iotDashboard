@@ -58,6 +58,23 @@ export const devicesApi = {
     apiClient.get<{ device_id: string; device_name: string; metrics: string[] }>(
       `/devices/${id}/metrics/`
     ),
+  
+  getComfortIndex: (id: string) =>
+    apiClient.get<{
+      device_id: string;
+      device_name: string;
+      overall_score: number;
+      rating: string;
+      components: {
+        temperature: number;
+        humidity: number;
+        air_quality: number;
+        acoustic: number;
+        light: number;
+      };
+      suggestions: string[];
+      raw_readings: Record<string, number>;
+    }>(`/devices/${id}/comfort_index/`),
 };
 
 // Telemetry API

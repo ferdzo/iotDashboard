@@ -1,0 +1,25 @@
+/* Widget-specific styling overrides */
+
+/* Reduce card body padding for widgets - default is 2rem (32px), we want less */
+.widget-card .card-body {
+  padding: 1rem; /* 16px instead of 32px */
+}
+
+/* Lighter shadow for widgets */
+.widget-card {
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+}
+
+/* Ensure cards fill their container properly */
+.widget-card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.widget-card .card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* Allow flex children to shrink */
+}

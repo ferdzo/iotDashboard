@@ -22,7 +22,7 @@ export default function WeatherWidget({ config }: WeatherWidgetProps) {
 
   if (isLoading) {
     return (
-      <div className="card bg-base-100 shadow-lg h-full">
+      <div className="widget-card card bg-base-100 h-full">
         <div className="card-body flex items-center justify-center">
           <span className="loading loading-spinner loading-lg"></span>
         </div>
@@ -32,9 +32,9 @@ export default function WeatherWidget({ config }: WeatherWidgetProps) {
 
   if (error) {
     return (
-      <div className="card bg-base-100 shadow-lg h-full">
+      <div className="widget-card card bg-base-100 h-full">
         <div className="card-body">
-          <h2 className="card-title text-sm">{config.title}</h2>
+          <h2 className="card-title text-sm truncate">{config.title}</h2>
           <div className="flex flex-col items-center justify-center flex-1">
             <p className="text-error">Failed to load weather data</p>
           </div>
@@ -61,26 +61,26 @@ export default function WeatherWidget({ config }: WeatherWidgetProps) {
   }
 
   return (
-    <div className="card bg-base-100 shadow-lg h-full">
+    <div className="widget-card card bg-base-100 h-full">
       <div className="card-body">
-        <h2 className="card-title text-sm">{config.title}</h2>
+        <h2 className="card-title text-sm truncate">{config.title}</h2>
         <div className="flex flex-col items-center justify-center flex-1">
           {/* Weather Icon */}
-          <div className="text-6xl mb-2">{getWeatherIcon(weather.weather_code)}</div>
+          <div className="text-5xl mb-1">{getWeatherIcon(weather.weather_code)}</div>
 
           {/* Temperature */}
-          <div className="text-4xl font-bold">{weather.temperature.toFixed(1)}°C</div>
-          <div className="text-sm text-base-content/60">
+          <div className="text-3xl font-bold">{weather.temperature.toFixed(1)}°C</div>
+          <div className="text-xs text-base-content/60">
             Feels like {weather.apparent_temperature.toFixed(1)}°C
           </div>
 
           {/* Weather Description */}
-          <div className="badge badge-primary badge-lg mt-2">
+          <div className="badge badge-primary mt-1 truncate max-w-full">
             {weather.weather_description}
           </div>
 
           {/* Additional Info */}
-          <div className="grid grid-cols-2 gap-4 mt-4 w-full text-sm">
+          <div className="grid grid-cols-2 gap-2 mt-2 w-full text-xs">
             <div className="flex items-center gap-2">
               <span className="opacity-60">💧</span>
               <span>{weather.humidity}%</span>
@@ -102,7 +102,9 @@ export default function WeatherWidget({ config }: WeatherWidgetProps) {
           </div>
 
           {/* Location */}
-          <div className="text-xs text-base-content/40 mt-3">{weather.location}</div>
+          <div className="text-xs text-base-content/40 mt-3 px-2 w-full overflow-hidden">
+            <div className="truncate text-center">{weather.location}</div>
+          </div>
         </div>
       </div>
     </div>

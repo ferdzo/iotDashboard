@@ -161,9 +161,10 @@ export default function Dashboard() {
 						preventCollision={false}
 						isResizable={true}
 						isDraggable={true}
+						margin={[12, 12]}
 					>
 						{config.widgets.map((widget) => (
-							<div key={widget.id}>
+							<div key={widget.id} className="h-full">
 								<WidgetContainer
 									config={widget}
 									onRemove={() => removeWidget(widget.id)}

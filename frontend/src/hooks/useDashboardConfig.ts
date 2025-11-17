@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-export type WidgetType = 'line-chart' | 'gauge' | 'stat' | 'ai-insight' | 'bar-chart' | 'air-quality' | 'weather'
+export type WidgetType = 'line-chart' | 'gauge' | 'stat' | 'ai-insight' | 'bar-chart' | 'air-quality' | 'weather' | 'comfort-index'
 
 export interface WidgetConfig {
   id: string

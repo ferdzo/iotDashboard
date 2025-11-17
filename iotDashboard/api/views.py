@@ -15,6 +15,11 @@ from iotDashboard.device_manager_client import (
 )
 from iotDashboard import gpt_service_client
 from iotDashboard import weather_client
+from iotDashboard.comfort_index import (
+    ComfortMetrics,
+    ComfortIndexCalculator,
+    calculate_comfort_index_from_telemetry,
+)
 from .serializers import (
     DeviceSerializer,
     DeviceCreateSerializer,
@@ -212,6 +217,66 @@ class DeviceViewSet(viewsets.ModelViewSet):
             'device_name': device.name,
             'metrics': list(metrics)
         })
+    
+    @action(detail=True, methods=['get'])
+    def comfort_index(self, request, pk=None):
+        """
+        Calculate comfort index from latest telemetry data.
+        
+        Returns overall comfort score (0-100) and component breakdowns.
+        """
+        device = self.get_object()
+        
+        # Get latest reading for each metric
+        latest_readings = {}
+        metrics_to_check = ['temperature', 'humidity', 'co2', 'CO2', 'noise', 'sound', 
+                           'pm2.5', 'PM2.5', 'pm10', 'PM10', 'light', 'lux']
+        
+        for metric in metrics_to_check:
+            reading = (
+                Telemetry.objects
+                .filter(device_id=device.id, metric=metric)
+                .order_by('-time')
+                .first()
+            )
+            if reading:
+                latest_readings[metric] = reading.value
+        
+        if not latest_readings:
+            return Response(
+                {'error': 'No telemetry data available for comfort calculation'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Calculate comfort index
+        comfort_metrics = ComfortMetrics(
+            temperature=latest_readings.get('temperature'),
+            humidity=latest_readings.get('humidity'),
+            co2=latest_readings.get('co2') or latest_readings.get('CO2'),
+            noise=latest_readings.get('noise') or latest_readings.get('sound'),
+            pm25=latest_readings.get('pm2.5') or latest_readings.get('PM2.5'),
+            pm10=latest_readings.get('pm10') or latest_readings.get('PM10'),
+            light=latest_readings.get('light') or latest_readings.get('lux'),
+        )
+        
+        comfort_score = ComfortIndexCalculator.calculate(comfort_metrics)
+        
+        return Response({
+            'device_id': device.id,
+            'device_name': device.name,
+            'overall_score': comfort_score.overall_score,
+            'rating': comfort_score.rating,
+            'components': {
+                'temperature': comfort_score.temperature_score,
+                'humidity': comfort_score.humidity_score,
+                'air_quality': comfort_score.air_quality_score,
+                'acoustic': comfort_score.acoustic_score,
+                'light': comfort_score.light_score,
+            },
+            'suggestions': comfort_score.suggestions,
+            'raw_readings': latest_readings,
+        })
+
 
 
 class TelemetryViewSet(viewsets.ReadOnlyModelViewSet):
