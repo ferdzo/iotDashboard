@@ -146,3 +146,150 @@ export const weatherApi = {
       sensor_count: number;
     }>('/weather/air_quality/', { params: { city } }),
 };
+
+// Dashboard Layout API
+export const dashboardLayoutApi = {
+  getAll: () =>
+    apiClient.get<Array<{
+      id: number
+      name: string
+      config: any
+      is_default: boolean
+      created_at: string
+      updated_at: string
+    }>>('/dashboard-layouts/'),
+
+  getDefault: () =>
+    apiClient.get<{
+      id: number
+      name: string
+      config: any
+      is_default: boolean
+      created_at: string
+      updated_at: string
+    }>('/dashboard-layouts/default/'),
+
+  create: (data: {
+    name: string
+    config: any
+    is_default?: boolean
+  }) =>
+    apiClient.post('/dashboard-layouts/', data),
+
+  update: (id: number, data: {
+    name?: string
+    config?: any
+    is_default?: boolean
+  }) =>
+    apiClient.put(`/dashboard-layouts/${id}/`, data),
+
+  delete: (id: number) =>
+    apiClient.delete(`/dashboard-layouts/${id}/`),
+
+  setDefault: (id: number) =>
+    apiClient.post(`/dashboard-layouts/${id}/set_default/`),
+}
+
+// Wellness API
+export const wellnessApi = {
+  getRunSuitability: (healthDeviceId: string, city: string, timeOfDay?: string) =>
+    apiClient.get<{
+      status: 'GO' | 'MODERATE' | 'NO';
+      overall_score: number;
+      scores: {
+        weather: number;
+        air_quality: number;
+        health: number;
+      };
+      primary_reason: string;
+      detailed_insights: string[];
+      time_recommendations: string[];
+      suggestions: string[];
+      weather_data: {
+        temperature: number;
+        wind_speed: number;
+        precipitation: number;
+        description: string;
+      };
+      air_quality_data: {
+        pm25: number | null;
+        pm10: number | null;
+        status: string;
+      };
+      health_data: {
+        steps: number;
+        active_calories: number;
+        heart_rate: number | null;
+      };
+    }>('/wellness/run_suitability/', {
+      params: {
+        health_device_id: healthDeviceId,
+        city,
+        ...(timeOfDay && { time_of_day: timeOfDay }),
+      },
+    }),
+
+  getHealthInsights: (healthDeviceId: string, city?: string) =>
+    apiClient.get<{
+      health_metrics: {
+        steps: number;
+        active_calories: number;
+        heart_rate: number | null;
+        resting_heart_rate: number | null;
+      };
+      environmental_context: {
+        temperature: number | null;
+        humidity: number | null;
+        pm25: number | null;
+        pm10: number | null;
+        air_quality_status: string | null;
+        weather_description: string | null;
+      };
+      insights: Array<{
+        metric: string;
+        value: number;
+        context: string;
+        correlation: string | null;
+        recommendation: string | null;
+      }>;
+      correlations: string[];
+      recommendations: string[];
+      trend_indicators: string[];
+    }>('/wellness/health_insights/', {
+      params: {
+        health_device_id: healthDeviceId,
+        ...(city && { city }),
+      },
+    }),
+
+  getDailyBriefing: (params: {
+    briefing_type: 'schedule' | 'environment' | 'full';
+    city: string;
+    health_device_id?: string;
+    calendar_url?: string;
+    calendar_range_hours?: number;
+  }) =>
+    apiClient.post<{
+      status_emoji: string;
+      status_line: string;
+      insights: string[];
+      recommendations: string[];
+      briefing_type: string;
+      generated_at: string;
+      context: {
+        indoor: Record<string, number> | null;
+        outdoor: Record<string, number | string | null> | null;
+        health: Record<string, number> | null;
+        calendar_event_count: number;
+      };
+    }>('/wellness/daily_briefing/', params),
+};
+
+// Calendar API
+export const calendarApi = {
+  fetch: (calendarUrl: string, options?: { signal?: AbortSignal }) =>
+    apiClient.get<{ calendar_data: string }>('/calendar/fetch/', {
+      params: { calendar_url: calendarUrl },
+      signal: options?.signal,
+    }),
+};

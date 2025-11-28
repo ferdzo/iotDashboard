@@ -56,6 +56,75 @@ class GPTServiceClient:
             logger.error(f"GPT service health check failed: {e}")
             raise
 
+    async def generate_daily_briefing(
+        self,
+        briefing_type: Literal["schedule", "environment", "full"],
+        current_time: str,
+        indoor_data: Optional[Dict[str, Any]] = None,
+        outdoor_data: Optional[Dict[str, Any]] = None,
+        health_data: Optional[Dict[str, Any]] = None,
+        calendar_events: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Generate a daily briefing for office workers.
+        
+        Args:
+            briefing_type: 'schedule', 'environment', or 'full'
+            current_time: Current time in ISO format
+            indoor_data: Indoor environment readings
+            outdoor_data: Weather and air quality data
+            health_data: Health/fitness metrics
+            calendar_events: List of upcoming calendar events
+            
+        Returns:
+            Dict with status_emoji, status_line, insights, recommendations
+            
+        Raises:
+            GPTServiceError: If request fails
+        """
+        payload = {
+            "briefing_type": briefing_type,
+            "current_time": current_time,
+        }
+        
+        if indoor_data:
+            payload["indoor_data"] = indoor_data
+        if outdoor_data:
+            payload["outdoor_data"] = outdoor_data
+        if health_data:
+            payload["health_data"] = health_data
+        if calendar_events:
+            payload["calendar_events"] = calendar_events
+        
+        try:
+            logger.info(f"Requesting {briefing_type} daily briefing")
+            response = await self.client.post("/daily-briefing", json=payload)
+            response.raise_for_status()
+            result = response.json()
+            logger.info(f"Daily briefing generated successfully")
+            return result
+        except httpx.HTTPStatusError as e:
+            error_detail = e.response.text
+            logger.error(f"GPT service returned error {e.response.status_code}: {error_detail}")
+            raise GPTServiceError(
+                message=f"GPT service error: {error_detail}",
+                status_code=e.response.status_code,
+                details={"response": error_detail}
+            )
+        except httpx.RequestError as e:
+            logger.error(f"Failed to connect to GPT service: {e}")
+            raise GPTServiceError(
+                message=f"GPT service unavailable: {str(e)}",
+                status_code=503,
+                details={"error": str(e)}
+            )
+        except Exception as e:
+            logger.error(f"Failed to generate daily briefing: {e}")
+            raise GPTServiceError(
+                message=f"Briefing generation failed: {str(e)}",
+                details={"error": str(e)}
+            )
+
     async def analyze_telemetry(
         self,
         telemetry_data: List[Dict[str, Any]],

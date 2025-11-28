@@ -2,6 +2,7 @@
 
 from rest_framework import serializers
 from iotDashboard.models import Device, DeviceCertificate, Telemetry
+from iotDashboard.dashboard_models import DashboardLayout
 
 
 class DeviceCertificateSerializer(serializers.ModelSerializer):
@@ -75,3 +76,13 @@ class DashboardOverviewSerializer(serializers.Serializer):
     certificates_expiring_soon = serializers.IntegerField()
     recent_telemetry = TelemetrySerializer(many=True)
     devices_with_metrics = DeviceMetricsSerializer(many=True)
+
+
+# Dashboard Layout Serializers
+class DashboardLayoutSerializer(serializers.ModelSerializer):
+    """Serializer for dashboard layouts (single-user system)."""
+    
+    class Meta:
+        model = DashboardLayout
+        fields = ['id', 'name', 'config', 'is_default', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']

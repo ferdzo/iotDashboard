@@ -8,6 +8,10 @@ import AiInsightWidget from './AiInsightWidget'
 import AirQualityWidget from './AirQualityWidget'
 import WeatherWidget from './WeatherWidget'
 import ComfortIndexWidget from './ComfortIndexWidget'
+import RunSuitabilityWidget from './RunSuitabilityWidget'
+import HealthStatsWidget from './HealthStatsWidget'
+import CalendarWidget from './CalendarWidget'
+import DailyBriefingWidget from './DailyBriefingWidget'
 
 interface WidgetProps {
   config: WidgetConfig
@@ -22,4 +26,8 @@ export const widgetRegistry: Record<WidgetType, ComponentType<WidgetProps>> = {
   'air-quality': AirQualityWidget,
   'weather': WeatherWidget,
   'comfort-index': ComfortIndexWidget,
+  'run-suitability': RunSuitabilityWidget,
+  'health-stats': HealthStatsWidget,
+  'calendar': CalendarWidget,
+  'daily-briefing': DailyBriefingWidget,
 }

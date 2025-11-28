@@ -1,3 +1,4 @@
+import { memo, useEffect, useRef } from 'react'
 import type { WidgetConfig } from '../../hooks'
 import { widgetRegistry } from './registry'
 
@@ -5,10 +6,34 @@ interface WidgetContainerProps {
   config: WidgetConfig
   onRemove?: (id: string) => void
   onEdit?: (id: string) => void
+  onHeightChange?: (height: number) => void
 }
 
-export default function WidgetContainer({ config, onRemove, onEdit }: WidgetContainerProps) {
+function WidgetContainer({ config, onRemove, onEdit, onHeightChange }: WidgetContainerProps) {
   const WidgetComponent = widgetRegistry[config.type]
+  const contentRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!onHeightChange || !contentRef.current) return
+
+    const node = contentRef.current
+
+    const emitHeight = () => {
+      onHeightChange(node.scrollHeight)
+    }
+
+    emitHeight()
+
+    const resizeObserver = new ResizeObserver(() => {
+      emitHeight()
+    })
+
+    resizeObserver.observe(node)
+
+    return () => {
+      resizeObserver.disconnect()
+    }
+  }, [onHeightChange, config.id])
 
   if (!WidgetComponent) {
     return (
@@ -21,10 +46,9 @@ export default function WidgetContainer({ config, onRemove, onEdit }: WidgetCont
   }
 
   return (
-    <div className="relative group h-full">
-      {/* Drag handle and actions */}
-      <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between p-2 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-b from-base-300/90 to-transparent">
-        <div className="drag-handle cursor-move flex items-center gap-1 px-2 py-1 rounded bg-base-100/80 text-xs">
+    <div className="relative group h-full w-full">
+      <div className="absolute top-2 left-2 right-2 z-20 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+        <div className="drag-handle cursor-move flex items-center gap-1 px-2 py-1 rounded bg-base-100 shadow-md text-xs border border-base-300 pointer-events-auto">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             className="h-4 w-4"
@@ -41,11 +65,15 @@ export default function WidgetContainer({ config, onRemove, onEdit }: WidgetCont
           </svg>
           Drag
         </div>
-        <div className="flex gap-1">
+        <div className="flex gap-1 pointer-events-auto">
           {onEdit && (
             <button
-              className="btn btn-xs btn-circle btn-ghost bg-base-100/80"
-              onClick={() => onEdit(config.id)}
+              type="button"
+              className="btn btn-xs btn-circle btn-ghost bg-base-100 shadow-md border border-base-300 hover:bg-base-200"
+              onClick={(e) => {
+                e.stopPropagation()
+                onEdit(config.id)
+              }}
               title="Edit widget"
             >
               <svg
@@ -66,8 +94,12 @@ export default function WidgetContainer({ config, onRemove, onEdit }: WidgetCont
           )}
           {onRemove && (
             <button
-              className="btn btn-xs btn-circle btn-ghost bg-base-100/80"
-              onClick={() => onRemove(config.id)}
+              type="button"
+              className="btn btn-xs btn-circle btn-ghost bg-base-100 shadow-md border border-base-300 hover:bg-error hover:text-error-content"
+              onClick={(e) => {
+                e.stopPropagation()
+                onRemove(config.id)
+              }}
               title="Remove widget"
             >
               <svg
@@ -89,10 +121,12 @@ export default function WidgetContainer({ config, onRemove, onEdit }: WidgetCont
         </div>
       </div>
 
-      {/* Actual widget */}
-      <div className="h-full">
+      {/* Allow overlay to float without reserving layout space */}
+      <div className="w-full" ref={contentRef}>
         <WidgetComponent config={config} />
       </div>
     </div>
   )
 }
+
+export default memo(WidgetContainer)

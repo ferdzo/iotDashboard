@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, memo } from 'react'
 import {
   LineChart,
   Line,
@@ -17,15 +17,39 @@ interface LineChartWidgetProps {
   config: WidgetConfig
 }
 
+// Optimized date formatter - cache formatters to avoid recreating
+const timeFormatter = new Intl.DateTimeFormat('en-US', {
+  hour: '2-digit',
+  minute: '2-digit',
+})
+
+const dateTimeFormatter = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+})
+
+// Helper to format date efficiently
+function formatTime(date: Date): string {
+  return timeFormatter.format(date)
+}
+
+function formatDateTime(date: Date): string {
+  return dateTimeFormatter.format(date)
+}
+
 // Helper component to fetch data for a single metric
 function useMultiMetricData(deviceId: string, metricIds: string[], timeframe: WidgetConfig['timeframe']) {
-  // Fetch data for each metric (React allows hooks in arrays when count is stable)
+  // Only fetch data for metrics that exist (up to 5)
   const metric1 = useTelemetrySeries({
     deviceId,
     metric: metricIds[0] || '',
     hours: timeframe.hours,
     startTime: timeframe.startTime,
     endTime: timeframe.endTime,
+    limit: 500, // Limit data points for performance
   })
   
   const metric2 = useTelemetrySeries({
@@ -34,6 +58,8 @@ function useMultiMetricData(deviceId: string, metricIds: string[], timeframe: Wi
     hours: timeframe.hours,
     startTime: timeframe.startTime,
     endTime: timeframe.endTime,
+    limit: 500,
+    enabled: metricIds.length > 1,
   })
   
   const metric3 = useTelemetrySeries({
@@ -42,6 +68,8 @@ function useMultiMetricData(deviceId: string, metricIds: string[], timeframe: Wi
     hours: timeframe.hours,
     startTime: timeframe.startTime,
     endTime: timeframe.endTime,
+    limit: 500,
+    enabled: metricIds.length > 2,
   })
   
   const metric4 = useTelemetrySeries({
@@ -50,6 +78,8 @@ function useMultiMetricData(deviceId: string, metricIds: string[], timeframe: Wi
     hours: timeframe.hours,
     startTime: timeframe.startTime,
     endTime: timeframe.endTime,
+    limit: 500,
+    enabled: metricIds.length > 3,
   })
   
   const metric5 = useTelemetrySeries({
@@ -58,6 +88,8 @@ function useMultiMetricData(deviceId: string, metricIds: string[], timeframe: Wi
     hours: timeframe.hours,
     startTime: timeframe.startTime,
     endTime: timeframe.endTime,
+    limit: 500,
+    enabled: metricIds.length > 4,
   })
 
   const queries = [metric1, metric2, metric3, metric4, metric5].slice(0, metricIds.length)
@@ -65,7 +97,7 @@ function useMultiMetricData(deviceId: string, metricIds: string[], timeframe: Wi
   return { queries, metricIds }
 }
 
-export default function LineChartWidget({ config }: LineChartWidgetProps) {
+function LineChartWidget({ config }: LineChartWidgetProps) {
   const { deviceIds, metricIds, timeframe, visualization } = config
   const deviceId = deviceIds[0]
 
@@ -74,64 +106,83 @@ export default function LineChartWidget({ config }: LineChartWidgetProps) {
   const isLoading = queries.some((q) => q.isLoading)
   const error = queries.find((q) => q.error)?.error
 
-  // Combine data from all metrics into a single chart dataset
+  // Combine data from all metrics into a single chart dataset (optimized)
   const chartData = useMemo(() => {
     if (queries.length === 0 || !queries[0]?.data || queries[0].data.length === 0) return []
 
-    // Create a map of time -> { time, fullDateTime, metric1, metric2, ... }
-    const timeMap = new Map<string, Record<string, number | string>>()
+    // Limit total data points for performance (max 300 points)
+    const MAX_POINTS = 300
+    const totalPoints = queries.reduce((sum, q) => sum + (q.data?.length || 0), 0)
+    const shouldDownsample = totalPoints > MAX_POINTS
+    const step = shouldDownsample ? Math.ceil(totalPoints / MAX_POINTS) : 1
+
+    // Create a map of timestamp -> data point (using timestamp as key for better performance)
+    const timeMap = new Map<number, Record<string, number | string>>()
 
     queries.forEach((query, index) => {
       const metric = metricIds[index]
-      if (!query.data) return
+      if (!query.data || query.data.length === 0) return
       
-      query.data.forEach((point) => {
-        const date = new Date(point.time)
+      // Process data points efficiently (with downsampling if needed)
+      query.data.forEach((point, pointIndex) => {
+        // Skip points if downsampling
+        if (shouldDownsample && pointIndex % step !== 0) return
         
-        // Short time for X-axis display (just time)
-        const timeStr = date.toLocaleString('en-US', {
-          hour: '2-digit',
-          minute: '2-digit',
-        })
+        const timestamp = new Date(point.time).getTime()
         
-        // Full date/time for tooltip
-        const fullDateTime = date.toLocaleString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-        })
-        
-        const key = date.getTime().toString()
-        
-        if (!timeMap.has(key)) {
-          timeMap.set(key, { 
-            time: timeStr, 
-            fullDateTime: fullDateTime,
-            timestamp: date.getTime() 
+        if (!timeMap.has(timestamp)) {
+          const date = new Date(timestamp)
+          timeMap.set(timestamp, { 
+            time: formatTime(date), 
+            fullDateTime: formatDateTime(date),
+            timestamp 
           })
         }
         
-        const entry = timeMap.get(key)!
+        const entry = timeMap.get(timestamp)!
         entry[metric] = point.value
       })
     })
 
-    // Sort by timestamp
-    return Array.from(timeMap.values()).sort((a, b) => {
+    // Sort by timestamp and convert to array
+    const result = Array.from(timeMap.values()).sort((a, b) => {
       return (a.timestamp as number) - (b.timestamp as number)
     })
+
+    return result
   }, [queries, metricIds])
 
-  const colors = visualization?.colors || [
-    '#3b82f6', // blue
-    '#10b981', // green
-    '#f59e0b', // amber
-    '#ef4444', // red
-    '#8b5cf6', // purple
-    '#ec4899', // pink
-  ]
+  // Memoize colors to avoid recreating array
+  const colors = useMemo(() => 
+    visualization?.colors || [
+      '#3b82f6', // blue
+      '#10b981', // green
+      '#f59e0b', // amber
+      '#ef4444', // red
+      '#8b5cf6', // purple
+      '#ec4899', // pink
+    ],
+    [visualization?.colors]
+  )
+
+  // Memoize lines to avoid recreating on every render
+  const lines = useMemo(() => 
+    metricIds.map((metric, index) => (
+      <Line
+        key={metric}
+        type="monotone"
+        dataKey={metric}
+        stroke={colors[index % colors.length]}
+        strokeWidth={2}
+        dot={false} // Disable dots for better performance
+        activeDot={{ r: 4 }}
+        connectNulls={true}
+        name={formatMetricName(metric)}
+        isAnimationActive={false} // Disable animations for better performance
+      />
+    )),
+    [metricIds, colors]
+  )
 
   if (isLoading) {
     return (
@@ -190,7 +241,11 @@ export default function LineChartWidget({ config }: LineChartWidgetProps) {
           {config.title || metricIds.map(formatMetricName).join(' & ')}
         </h3>
         <ResponsiveContainer width="100%" height={visualization?.height || 280}>
-          <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 50 }}>
+          <LineChart 
+            data={chartData} 
+            margin={{ top: 5, right: 20, left: 0, bottom: 50 }}
+            syncId="dashboard-charts" // Sync charts for better performance
+          >
             {visualization?.showGrid !== false && (
               <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
             )}
@@ -200,6 +255,7 @@ export default function LineChartWidget({ config }: LineChartWidgetProps) {
               angle={-45}
               textAnchor="end"
               height={50}
+              interval="preserveStartEnd" // Reduce number of ticks
             />
             <YAxis tick={{ fontSize: 12 }} />
             <Tooltip
@@ -216,22 +272,13 @@ export default function LineChartWidget({ config }: LineChartWidgetProps) {
               formatter={(value: number) => [value.toFixed(2)]}
             />
             {visualization?.showLegend !== false && <Legend />}
-            {metricIds.map((metric, index) => (
-              <Line
-                key={metric}
-                type="monotone"
-                dataKey={metric}
-                stroke={colors[index % colors.length]}
-                strokeWidth={2}
-                dot={{ r: 2, strokeWidth: 0 }}
-                activeDot={{ r: 4 }}
-                connectNulls={true}
-                name={formatMetricName(metric)}
-              />
-            ))}
+            {lines}
           </LineChart>
         </ResponsiveContainer>
       </div>
     </div>
   )
 }
+
+// Memoize the component to prevent unnecessary re-renders
+export default memo(LineChartWidget)
