@@ -1,5 +1,6 @@
 from openai import OpenAI
 from typing import List, Dict, Any
+from datetime import datetime
 
 from config import API_KEY, MODEL_NAME, PROVIDER_NAME, HOST_URL, LOG_LEVEL
 import logging
@@ -371,4 +372,247 @@ Keep all text concise: summary under 50 words, each item under 20 words.""",
             
         except Exception as e:
             self.logger.error(f"Analysis failed: {str(e)}")
+            raise
+
+    async def generate_daily_briefing(
+        self,
+        briefing_type: str,
+        current_time: str,
+        indoor_data: Dict[str, Any] | None = None,
+        outdoor_data: Dict[str, Any] | None = None,
+        health_data: Dict[str, Any] | None = None,
+        calendar_events: List[Dict[str, Any]] | None = None,
+    ) -> Dict[str, Any]:
+        """
+        Generate a daily briefing for office workers.
+        
+        Args:
+            briefing_type: 'schedule', 'environment', or 'full'
+            current_time: Current time in ISO format
+            indoor_data: Indoor environment readings (temp, humidity, co2, etc.)
+            outdoor_data: Weather and air quality data
+            health_data: Health/fitness metrics (steps, heart rate, etc.)
+            calendar_events: List of upcoming calendar events
+            
+        Returns:
+            Dict with status_line, status_emoji, insights, recommendations, context
+        """
+        try:
+            # Build context sections
+            context_sections = []
+            
+            # Current time context
+            try:
+                dt = datetime.fromisoformat(current_time.replace('Z', '+00:00'))
+                time_str = dt.strftime("%A, %B %d at %I:%M %p")
+            except:
+                time_str = current_time
+            context_sections.append(f"Current Time: {time_str}")
+            
+            # Indoor environment
+            if indoor_data:
+                indoor_lines = ["Indoor Environment:"]
+                for key, value in indoor_data.items():
+                    if value is not None:
+                        indoor_lines.append(f"  - {key}: {value}")
+                context_sections.append("\n".join(indoor_lines))
+            
+            # Outdoor conditions
+            if outdoor_data:
+                outdoor_lines = ["Outdoor Conditions:"]
+                for key, value in outdoor_data.items():
+                    if value is not None:
+                        outdoor_lines.append(f"  - {key}: {value}")
+                context_sections.append("\n".join(outdoor_lines))
+            
+            # Health metrics
+            if health_data:
+                health_lines = ["Health & Activity:"]
+                for key, value in health_data.items():
+                    if value is not None:
+                        health_lines.append(f"  - {key}: {value}")
+                context_sections.append("\n".join(health_lines))
+            
+            # Calendar events
+            if calendar_events:
+                cal_lines = ["Upcoming Schedule:"]
+                for event in calendar_events[:10]:  # Limit to 10 events
+                    start = event.get('start', 'TBD')
+                    summary = event.get('summary', 'Untitled')
+                    location = event.get('location', '')
+                    loc_str = f" at {location}" if location else ""
+                    cal_lines.append(f"  - {start}: {summary}{loc_str}")
+                context_sections.append("\n".join(cal_lines))
+            
+            context = "\n\n".join(context_sections)
+            
+            # Build briefing-specific prompts
+            prompts = {
+                "schedule": f"""You are a smart wellness coach for office workers (software engineers, tech/finance professionals).
+Generate a Schedule Briefing focused on calendar and activity optimization.
+
+{context}
+
+Environmental thresholds for reference:
+- CO2 > 1000ppm: cognitive performance drops, ventilate before focused work
+- PM2.5 > 35: poor outdoor air, avoid outdoor activities
+- Temperature 20-24°C: optimal for focus work
+- Steps goal: 10,000/day, take breaks every 2 hours
+
+Respond in this EXACT JSON format (no markdown, just valid JSON):
+{{
+  "status_emoji": "🟢|🟡|🔴",
+  "status_line": "One sentence summary of schedule/activity outlook",
+  "insights": [
+    "Actionable insight tied to specific time or event",
+    "Another insight about activity or scheduling",
+    "Insight about outdoor activity timing based on conditions"
+  ],
+  "recommendations": [
+    "Primary recommendation with specific timing",
+    "Secondary recommendation"
+  ]
+}}
+
+Guidelines:
+- Tie insights to SPECIFIC upcoming events or time slots
+- Suggest activity breaks during schedule gaps
+- Recommend outdoor activity timing based on air quality
+- Keep each insight under 25 words
+- Be specific about times (e.g., "before your 2pm meeting" not "later today")
+- Focus on productivity, movement, and work-life balance""",
+
+                "environment": f"""You are a smart wellness coach for office workers (software engineers, tech/finance professionals).
+Generate an Environment Briefing focused on indoor workspace conditions.
+
+{context}
+
+Environmental thresholds and their impacts:
+- CO2 400-800ppm: optimal | 800-1000ppm: acceptable | >1000ppm: ventilate (affects cognition)
+- Temperature 20-22°C: optimal | 18-24°C: acceptable | outside: adjust
+- Humidity 40-60%: optimal | <30%: too dry | >70%: too humid
+- PM2.5 0-12: good | 12-35: moderate | >35: unhealthy
+- Light 400-500 lux: optimal for desk work
+
+Respond in this EXACT JSON format (no markdown, just valid JSON):
+{{
+  "status_emoji": "🟢|🟡|🔴",
+  "status_line": "One sentence summary of workspace conditions",
+  "insights": [
+    "Insight about most important environmental factor with action",
+    "Insight about another condition affecting work",
+    "Insight about ventilation or air quality"
+  ],
+  "recommendations": [
+    "Primary action to improve workspace",
+    "Secondary recommendation"
+  ]
+}}
+
+Guidelines:
+- If CO2 is high, mention opening windows BEFORE the next meeting/focused work
+- Tie environmental actions to upcoming activities when possible
+- Be specific about what to do (e.g., "open window" not "improve ventilation")
+- Mention how conditions affect cognitive performance
+- Keep each insight under 25 words""",
+
+                "full": f"""You are a smart wellness coach for office workers (software engineers, tech/finance professionals).
+Generate a comprehensive Daily Briefing combining schedule, environment, and health.
+
+{context}
+
+Environmental thresholds:
+- CO2 > 1000ppm: cognitive performance drops
+- PM2.5 > 35: poor outdoor air quality
+- Temperature 20-24°C: optimal for focus
+
+Health targets:
+- 10,000 steps/day
+- Movement break every 2 hours
+- Heart rate zones for activity planning
+
+Respond in this EXACT JSON format (no markdown, just valid JSON):
+{{
+  "status_emoji": "🟢|🟡|🔴",
+  "status_line": "One sentence overall summary",
+  "insights": [
+    "Most important cross-domain insight (environment + schedule)",
+    "Health/activity insight tied to schedule",
+    "Environmental condition affecting upcoming work",
+    "Outdoor activity timing recommendation"
+  ],
+  "recommendations": [
+    "Primary recommendation combining multiple factors",
+    "Secondary recommendation"
+  ]
+}}
+
+Guidelines:
+- Connect environment to schedule (e.g., "ventilate before your debugging session")
+- Suggest activity timing based on air quality AND schedule gaps
+- Prioritize actionable insights over status reports
+- Be specific about times and actions
+- Keep each insight under 25 words"""
+            }
+            
+            prompt = prompts.get(briefing_type, prompts["full"])
+            
+            system_prompt = """You are an expert wellness coach for knowledge workers. You help office workers (especially software engineers and tech/finance professionals) maintain optimal productivity and health by providing actionable, timing-specific advice.
+
+Your insights should:
+1. Be tied to specific times or upcoming events
+2. Explain WHY something matters (e.g., "CO2 affects focus")
+3. Give specific actions (e.g., "open the window now" not "improve air")
+4. Consider work patterns (deep work, meetings, breaks)
+
+Always respond with valid JSON only, no markdown formatting."""
+
+            self.logger.info(f"Generating {briefing_type} briefing")
+            
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=1000
+            )
+            
+            result_text = response.choices[0].message.content
+            self.logger.info(f"Briefing generated. Tokens used: {response.usage.total_tokens}")
+            
+            # Parse JSON response
+            import json
+            # Clean potential markdown wrapping
+            if result_text.startswith("```"):
+                result_text = result_text.split("```")[1]
+                if result_text.startswith("json"):
+                    result_text = result_text[4:]
+            result_text = result_text.strip()
+            
+            result = json.loads(result_text)
+            
+            return {
+                "status_emoji": result.get("status_emoji", "🟢"),
+                "status_line": result.get("status_line", "Briefing generated"),
+                "insights": result.get("insights", []),
+                "recommendations": result.get("recommendations", []),
+                "briefing_type": briefing_type,
+                "generated_at": current_time,
+            }
+            
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Failed to parse briefing JSON: {e}")
+            self.logger.error(f"Raw response: {result_text}")
+            return {
+                "status_emoji": "⚠️",
+                "status_line": "Briefing generated with formatting issues",
+                "insights": [result_text[:200] if result_text else "Unable to generate insights"],
+                "recommendations": [],
+                "briefing_type": briefing_type,
+                "generated_at": current_time,
+            }
+        except Exception as e:
+            self.logger.error(f"Briefing generation failed: {str(e)}")
             raise

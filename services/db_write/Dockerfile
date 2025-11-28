@@ -20,6 +20,8 @@ WORKDIR /app
 
 COPY --from=builder /app/.venv /app/.venv
 
+COPY --from=builder /app/src/ /app/src/
+
 COPY --from=builder /app/*.py /app/
 
 RUN adduser -D -u 1000 appuser && \

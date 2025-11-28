@@ -48,6 +48,34 @@ class AnalyzeResponse(BaseModel):
     data_points_analyzed: int
 
 
+class CalendarEvent(BaseModel):
+    summary: str
+    start: str
+    end: str | None = None
+    location: str | None = None
+
+
+class DailyBriefingRequest(BaseModel):
+    briefing_type: Literal["schedule", "environment", "full"] = Field(
+        default="full",
+        description="Type of briefing to generate"
+    )
+    current_time: str = Field(..., description="Current time in ISO format")
+    indoor_data: Dict[str, Any] | None = Field(None, description="Indoor environment readings")
+    outdoor_data: Dict[str, Any] | None = Field(None, description="Weather and air quality data")
+    health_data: Dict[str, Any] | None = Field(None, description="Health/fitness metrics")
+    calendar_events: List[CalendarEvent] | None = Field(None, description="Upcoming calendar events")
+
+
+class DailyBriefingResponse(BaseModel):
+    status_emoji: str
+    status_line: str
+    insights: List[str]
+    recommendations: List[str]
+    briefing_type: str
+    generated_at: str
+
+
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "service": "gpt_service"}
@@ -91,3 +119,39 @@ async def analyze_telemetry(request: AnalyzeRequest):
     except Exception as e:
         logger.error(f"Analysis failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+
+@app.post("/daily-briefing", response_model=DailyBriefingResponse)
+async def generate_daily_briefing(request: DailyBriefingRequest):
+    """
+    Generate a daily briefing for office workers.
+    Combines environment, schedule, and health data into actionable insights.
+    """
+    try:
+        if not gpt_service:
+            raise HTTPException(status_code=503, detail="GPT service not initialized")
+        
+        logger.info(f"Generating {request.briefing_type} briefing")
+        
+        # Convert calendar events to dicts
+        calendar_events = None
+        if request.calendar_events:
+            calendar_events = [event.model_dump() for event in request.calendar_events]
+        
+        result = await gpt_service.generate_daily_briefing(
+            briefing_type=request.briefing_type,
+            current_time=request.current_time,
+            indoor_data=request.indoor_data,
+            outdoor_data=request.outdoor_data,
+            health_data=request.health_data,
+            calendar_events=calendar_events,
+        )
+        
+        return DailyBriefingResponse(**result)
+        
+    except ValueError as e:
+        logger.error(f"Validation error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Briefing generation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Briefing generation failed: {str(e)}")

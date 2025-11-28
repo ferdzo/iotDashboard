@@ -8,7 +8,7 @@ services:
       - redis-data:/data
     restart: unless-stopped
   
-  mqtt:
+  mosquitto:
     image: eclipse-mosquitto:2.0
     ports:
       - "1883:1883"
@@ -29,6 +29,39 @@ services:
     volumes:
       - timescaledb-data:/var/lib/postgresql/data
     restart: unless-stopped
+
+  db-write:
+    build: 
+      context: ../services/db_write
+    env_file:
+      - .env.dbw
+    depends_on:
+      - timescaledb
+      - redis
+      - mqtt-ingestion
+    restart:
+      unless-stopped
+  
+  mqtt-ingestion:
+    build: 
+      context: ../services/mqtt_ingestion
+    env_file:
+      - .env.mqi
+    depends_on:
+      - mosquitto
+      - redis
+    restart:
+      unless-stopped
+
+  # gpt-service:
+  #   build:
+  #     context: ./services/gpt_service
+  #   ports:
+  #     - "8001:8001"
+  #   restart: unless-stopped
+
+
+      
 
 volumes:
   redis-data:
