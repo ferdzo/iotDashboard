@@ -1,0 +1,63 @@
+\documentclass[a4paper]{article}
+
+\input{Source files/setup}
+
+
+\newcommand{\UniversityName}
+    {Универзитет „Св. Кирил и Методиј" во Скопје}
+\newcommand{\FacultyName}
+    {Факултет за информатички науки и компјутерско инженерство}
+\newcommand{\ProjectType}
+    {Дипломска работа}
+
+\newcommand{\ProjectTitle}
+    {Lyncis – IoT платформа за собирање и анализа на информации за работната околина}
+\newcommand{\ProjectMentor}
+    {Проф. д-р Игор Мишковски}
+\newcommand{\ProjectCandidate}
+    {Андреј Мицков}
+\newcommand{\ProjectCandidateIndex}
+    {216014}
+\newcommand{\ProjectDate}
+    {Декември 2025}
+
+
+\begin{document}
+
+    % Насловна страна
+    \input{Source files/00_titlepage}
+
+    \setlength{\parindent}{15pt}
+    \fontsize{12pt}{14pt}\selectfont
+    
+    % Апстракт
+    \input{Source files/01_abstract}
+
+    % Содржина
+    \newpage
+    \renewcommand{\contentsname}{\LARGE Содржина}
+    \tableofcontents
+
+    % Вовед
+    \input{Source files/02_introduction}
+
+    % Основи на IoT и применети технологии
+    \input{Source files/03_theory}
+
+    % Дизајн на системот
+    \input{Source files/04_design}
+
+    % Имплементација
+    \input{Source files/05_implementation}
+
+    % Резултати
+    \input{Source files/06_results}
+
+    % Заклучок
+    \input{Source files/07_conclusion}
+
+    % Библиографија
+    \input{Source files/bibliography}
+    
+
+\end{document}

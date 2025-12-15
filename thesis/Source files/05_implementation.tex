@@ -1,0 +1,764 @@
+\newpage
+
+\section{Имплементација}
+
+Во оваа глава се прикажува практичната имплементација на платформата и
+нејзината архитектура претходно опишана. Претставени се клучни делови од
+backend-от, микросервисната инфраструктура и frontend апликацијата.
+Ставен е акцент на најрелевантните и најинтересните сегменти кои
+демонстрираат реализација на архитектонските одлуки, безбедносните
+механизми и протокот на податоци низ системот.
+
+\subsection{Backend имплементација}
+
+Backend делот е имплементиран со користење на Django и Django REST
+Framework (DRF) и претставува централна контролна точка за комуникација
+помеѓу frontend апликацијата, микросервисите и базата на податоци.
+Django REST API-то функционира како API gateway, преку кој се
+реализираат сите операции поврзани со уредите, сертификатите,
+телеметриските податоци и интелигентната анализа.
+
+Иако системот користи \texttt{PostgreSQL} со \texttt{TimescaleDB} за складирање на
+телеметрија, Django не управува со овие табели во write режим, Django
+има read-only пристап, со што се избегнува мешање на Django ORM во
+ingestion процесот, кој целосно се реализира преку микросервисите
+mqtt\_ingestion и db\_write. Овој пристап овозможува висока
+конзистентност, безбедно пишување на податоците и одвојување на
+ingestion логиката од API слојот.
+
+\subsubsection{Django REST API како комуникациски слој}
+
+Django REST Framework (DRF) е искористен како централен комуникациски
+слој помеѓу frontend апликација, микросервисите и базата на податоци.
+Django API има улога на API gateway, преку кој се реализираат сите
+надворешни барања од корисничкиот интерфејс, додека вистинската бизнис
+логика (сертификати, AI анализа, ingest) е делегирана на посебни
+микросервиси.
+
+Во рамките на овој слој, за управување со уредите и телеметриските
+податоци се користат DRF ModelViewSet и ReadOnlyModelViewSet. Основната
+дефиниција е реализирана преку:
+
+\begin{minted}{python}
+class DeviceViewSet(viewsets.ModelViewSet):
+    queryset = Device.objects.all()
+    serializer_class = DeviceSerializer
+
+
+class TelemetryViewSet(viewsets.ReadOnlyModelViewSet):
+    """ViewSet for telemetry data queries."""
+    
+    queryset = Telemetry.objects.all()
+    serializer_class = TelemetrySerializer
+\end{minted}
+
+DRF автоматски обезбедува CRUD операции, додека другите дополнителни
+функционалности се обезбедуваат преку користење на @action декоратор, со
+што се овозможуваат различни API повици , како што се регистрација на
+уреди, обновување на сертификати, како и пристап до телеметриски
+податоци
+
+Посебна карактеристика на оваа имплементација е тоа што моделите Device,
+DeviceCertificate и Telemtery се дефинирани како read-only модели,
+бидејќи Django не треба да учествува во додавање или било каква измена
+во овие табели, туку само да ги чита потребните податоци од овие табели.
+Телеметриските податоци се внесуваат преку микросервисите
+\texttt{mqtt\_ingestion} и \texttt{db\_write}, со што се избегнува двојно запишување,
+конфликт на податоци и се обезбедува подобра скалабилност на системот.
+Додека пак за сертификатите се грижи само \texttt{device\_manager} микросервисот.
+
+Дополнително, Django API слојот има строго дефинирани \textbf{граници на
+одговорност}. Тој не обработува сурови MQTT пораки, не генерира
+сертификати и не комуницира директно со IoT уредите. Со оваа поделба,
+веб апликацијата останува лесна, безбедна и отпорна на преоптоварување,
+додека високофреквентната комуникација и обработката на податоци се
+извршуваат во специјализирани сервиси.
+
+Од безбедносен аспект, Django API претставува заштитна бариера помеѓу
+јавниот кориснички интерфејс и внатрешната инфраструктура. Сите
+чувствителни операции, како регистрација на уреди и пристап до
+сертификати, се извршуваат преку автентицирани и логички контролирани
+API повици, со што се спречува директен пристап до микросервисите од
+надворешна страна.
+
+Со ваквата архитектура, Django REST API слојот обезбедува:
+
+\begin{itemize}
+\item
+  централизирана точка за комуникација,
+\item
+  логичка сегрегација на одговорностите,
+\item
+  зголемена безбедност,
+\item
+  и чиста интеграција помеѓу корисничкиот интерфејс и backend
+  инфраструктурата.
+\end{itemize}
+
+\subsubsection{Валидација на податоци и серијализација со DRF Serializers}
+
+Во рамките на Django API слојот, валидацијата, трансформацијата и
+форматирањето на податоците се реализираат преку Django REST Framework
+Serializer и ModelSerializer класи. Serializer-ите претставуваат
+критична компонента од безбедносен аспект, бидејќи овозможуваат целосна
+контрола врз податоците кои се примаат и испраќаат преку API
+интерфејсот.
+
+При регистрација на нов IoT уред се користи посебен serializer за
+валидација на влезните податоци:
+
+\begin{minted}{python}
+class DeviceCreateSerializer(serializers.Serializer):
+    """Serializer for device registration requests."""
+    
+    name = serializers.CharField(max_length=255)
+    location = serializers.CharField(max_length=255,
+                required=False,
+                allow_blank=True)
+    protocol = serializers.ChoiceField(choices=
+                ['mqtt', 'http', 'webhook'],
+                default='mqtt')
+    connection_config = serializers.JSONField(required=False, allow_null=True)
+
+
+class TelemetrySerializer(serializers.ModelSerializer):
+    """Serializer for telemetry data."""
+    
+    class Meta:
+        model = Telemetry
+        fields = ['time', 'device_id', 'metric', 'value', 'unit']
+
+
+class DeviceMetricsSerializer(serializers.Serializer):
+    """Serializer for device metrics list."""
+    
+    device_id = serializers.CharField()
+    device_name = serializers.CharField()
+    metrics = serializers.ListField(child=serializers.CharField())
+
+
+class DashboardOverviewSerializer(serializers.Serializer):
+    """Serializer for dashboard overview data."""
+    
+    total_devices = serializers.IntegerField()
+    active_devices = serializers.IntegerField()
+    mqtt_devices = serializers.IntegerField()
+    http_devices = serializers.IntegerField()
+    certificates_expiring_soon = serializers.IntegerField()
+    recent_telemetry = TelemetrySerializer(many=True)
+    devices_with_metrics = DeviceMetricsSerializer(many=True)
+\end{minted}
+
+
+Овој serializer обезбедува:
+
+\begin{itemize}
+\item
+  задолжително внесување на име на уредот (name),
+\item
+  опционално дефинирање на локација (location),
+\item
+  избор на комуникациски протокол (mqtt, http или webhook),
+\item
+  можност за дополнителна конфигурација преку JSON структура
+  (connection\_config).
+\end{itemize}
+
+Со ваквиот пристап се гарантира дека кон device\_manager микросервисот
+ќе се испратат коректно форматирани и логички валидни податоци, со што
+се намалува можноста за грешки во внатрешните слоеви.
+
+На овој начин, Django REST Framework serializer-ите овозможуваат:
+
+\begin{itemize}
+\item
+  сигурна валидација на влезни податоци,
+\item
+  унифициран излезен формат за frontend апликацијата,
+\item
+  раздвојување на логиката за форматирање од бизнис-логиката,
+\item
+  и стабилен API договор помеѓу сите компоненти во системот.
+\end{itemize}
+
+\subsubsection{Регистрација на уреди преку \texttt{device\_manager} микросервис}
+
+Регистрацијата на нов IoT уред во системот се реализира преку
+централизирана комуникација на Django API слојот и \texttt{device\_manager}
+микросервисот. Django не врши директна манипулација со сертификатите или
+било какви криптографски функционалности, туку ја има улогата посредник
+кој ги проследува валидираните податоци кон сервисот задолжен за
+управување со безбедноста.
+
+Регистрацијата се иницира преку POST барање кон Django API, при што
+најпрво се врши валидација на податоците преку DeviceCreateSerializer.
+Откако податоците ќе се потврдат како валидни, тие се проследуваат кон
+\texttt{device\_manager} преку посебен клиент за комуникација со микросервисите.
+
+\texttt{device\_manager} сервисот потоа:
+
+\begin{itemize}
+\item
+  креира нов запис за уредот во базата на податоци,
+\item
+  генерира X.509 сертификат и приватен криптографски клуч,
+\item
+  го потпишува сертификатот со интерниот Certificate Authority,
+\item
+  и ги враќа генерираните безбедносни податоци назад кон Django.
+\end{itemize}
+
+Django API, како одговор кон frontend апликацијата, ги враќа потребните
+информации за onboarding на уредот, како што се device\_id,
+сертификатот, приватниот клуч и податокот за важноста на сертификатот.
+На овој начин се обезбедува целосно автоматизиран и безбеден процес на
+регистрација без директна изложеност на криптографските логика кон
+корисничкиот слој.
+
+\begin{minted}{python}
+response = device_manager.register_device(
+    name=serializer.validated_data['name'],
+    location=serializer.validated_data.get('location'),
+    protocol=serializer.validated_data.get('protocol', 'mqtt'),
+)
+
+queryset = Telemetry.objects.filter(
+    device_id=device.id,
+    time__gte=timezone.now() - timedelta(hours=hours)
+)
+
+if metric:
+    queryset = queryset.filter(metric=metric)
+
+queryset = queryset.order_by('-time')[:limit]
+\end{minted}
+
+Покрај регистрацијата, преку Django API се реализира и управување со
+животниот циклус на уредите, односно:
+
+\begin{itemize}
+\item
+  повлекување на сертификати (revoke),
+\item
+  обновување на сертификати (renew),
+\item
+  како и целосно бришење на уредите од системот.
+\end{itemize}
+
+Сите овие операции се извршуваат исклучиво преку device\_manager
+микросервисот, со што се задржува централизирана контрола врз
+безбедносниот модел на системот.
+
+\subsection{Имплементација на микросервисната архитектура}
+
+Микросервисната архитектура претставува клучен дел од имплементацијата
+на оваа платформа, бидејќи овозможува раздвојување на комплексната
+логика во повеќе независни сервиси со јасно дефинирани одговорности.
+Секој микросервис функционира како посебна апликација со сопствена
+конфигурација, животен циклус, начин на комуникација, со што се
+зголемува флексибилноста, одржливоста и скалабилноста.
+
+Во рамките на оваа платформа се користат микросервиси за:
+
+\begin{itemize}
+\item
+  Управување со уреди и сертификати
+\item
+  Интелигентна анализа со помош на ВИ
+\item
+  Прибирање на телеметриските податоци од уредите преку MQTT
+\end{itemize}
+
+\subsubsection{Device\_manager микросервис - управување со уреди и сертификати}
+
+Микросервисот device\_manager има централна улога во платформата,
+задолжен е за менаџирање со уредите како и безбедната комуникација
+измеѓу. Тој е задолжен за креирање на уреди, издавање, обновување и
+повлекување на X.509 сертификати, како и управување со клучевите. Овој
+сервис е имплементиран со користење на FastAPI, што овозможува високи
+перформанси и лесна интеграција со останатите делови од системот.
+
+За разлика од Django backend-от кој има улога на API gateway,
+device\_manager директно работи со:
+
+\begin{itemize}
+\item
+  Генерирање на приватни клучеви
+\item
+  Издавање на сертификати преку интерниот CA
+\item
+  Креирање и ажурирање на CRL (Certificate Revocation List)
+\item
+  И чување на податоците за сертификатите во базата на податоци
+\end{itemize}
+
+Процесот на регистрација на еден уред во рамки на device\_manager
+микросервисот се состои од неколку чекори. Најпрво се креира запис за
+уредот во базата на податоци, по што се генерира приватен криптографски
+клуч. Потоа со тој приватен клуч се гради X.509 сертификат кој се
+потпишува со приватниот клуч на интерниот CA. На овој начин се
+обезбедува доверлива автентикација на секој уред во системот.
+
+\begin{minted}{python}
+
+@app.post("/devices/register")
+async def register_device(request: DeviceRegisterRequest,
+                            db: Session = Depends(get_db)):
+    device = Device(
+        name=request.name, 
+        location=request.location,
+        protocol=request.protocol
+    )
+    db.add(device)
+    db.commit()
+    
+    if request.protocol == "mqtt":
+        cert_pem,
+        key_pem,
+        ca_pem = cert_manager.generate_device_certificate(device.id)
+        
+        cert = x509.load_pem_x509_certificate(cert_pem)
+        db_cert = DeviceCertificate(
+            id=format(cert.serial_number, 'x'),
+            device_id=device.id,
+            expires_at=cert.not_valid_after_utc
+        )
+        db.add(db_cert)
+        db.commit()
+        
+        return {
+            "device_id": device.id,
+            "certificate_pem": cert_pem.decode(),
+            "private_key_pem": key_pem.decode(),
+            "ca_certificate_pem": ca_pem.decode(),
+        }
+
+\end{minted}
+\begin{minted}{python}
+
+def generate_device_certificate(device_id: str) -> tuple[bytes, bytes, bytes]:
+    private_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048
+    )
+    
+    subject = x509.Name([
+        x509.NameAttribute(NameOID.COMMON_NAME, device_id),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Lyncis IoT"),
+    ])
+    
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(ca_cert.subject)
+        .public_key(private_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(datetime.utcnow())
+        .not_valid_after(datetime.utcnow() + timedelta(days=365))
+        .sign(ca_private_key, hashes.SHA256())
+    )
+    
+    return (
+        cert.public_bytes(Encoding.PEM),
+        private_key.private_bytes(Encoding.PEM, ...),
+        ca_cert.public_bytes(Encoding.PEM)
+    )
+\end{minted}
+
+Од прикажаната имплементација со код може да се забележи дека целиот процес
+на криптографска идентификација е изолиран во рамките на device\_manager
+микросервисот. Со користење на RSA клучеви со должина од 2048 бита и
+потпишување преку интерниот CA, се обезбедува сигурна идентификација и
+доверлива комуникација помеѓу уредите и MQTT инфраструктурата. На овој
+начин се елиминира потребата од лозинки и се зголемува целокупното ниво
+на безбедност на системот.
+
+\subsubsection{mqtt\_ingestion микросервис - прием на телеметриски податоци преку MQTT}
+
+Микросервисот \texttt{mqtt\_ingestion} има улога на централна точка на прием на
+сите телеметриски податоци кои ги испраќаат IoT уредите до MQTT
+\texttt{broker}-от. Неговата основна задача е сигурно и безбедно да ги прими
+пораките од MQTT \texttt{broker}-от, да изврши почетна валидација и да ги
+проследи преку \texttt{Redis Stream} до сервисот за запишување во базата на
+податоци.
+
+По воспоставување на конекцијата со MQTT \texttt{broker}-от, \texttt{mqtt\_ingestion} автоматски се претплатува на \texttt{topic}-от \texttt{devices/\#}, што значи дека слуша
+за сите пораки пратени во \texttt{topic}-от \texttt{device}. Ова овозможува автоматска
+претплата секаде, без динамичко претплатување на секој \texttt{topic} за секој
+поврзан уред.
+
+При пристигнување на порака се повикува callback функцијата \texttt{on\_message},
+во која се парсира \texttt{topic}-от и \texttt{payload}-от.
+
+\begin{minted}{python}
+  def _on_message(self, client, userdata, msg):
+    topic_parts = msg.topic.split("/")
+    if len(topic_parts) != 3 or topic_parts[0] != "devices":
+        logger.warning(f"Invalid topic format: {msg.topic}")
+        return
+
+    device_id = topic_parts[1]
+    sensor_type = topic_parts[2]
+    value = float(msg.payload.decode())
+    
+    self.message_handler(device_id, sensor_type, value)
+\end{minted}
+
+\begin{minted}{python}
+def _on_connect(self, client, userdata, flags, rc):
+    if rc == 0:
+        client.subscribe("devices/#")  # Subscribe to all device topics
+\end{minted}
+
+\begin{minted}{python}
+  def write_sensor_data(self, device_id: str, sensor_type: str, value: float):
+    timestamp = datetime.utcnow().isoformat()
+    stream_key = "mqtt:ingestion"
+    
+    stream_data = {
+        "device_id": device_id,
+        "metric": sensor_type,
+        "value": str(value),
+        "timestamp": timestamp,
+    }
+    
+    self.redis_client.xadd(stream_key, stream_data, maxlen=10000)
+\end{minted}
+
+\subsubsection{db\_write микросервис - запишување на телеметриски податоци во база}
+
+Микросервисот \texttt{db\_write} има улога на посредник помеѓу \texttt{Redis Streams}
+и \texttt{TimescaleDB} базата на податоци. Негова главна одговорност е сигурно, ефикасно и
+континунирано да ги презема телеметриските податоци кои претходно биле примени и иницијално
+обработени од \texttt{mqtt\_ingetsion} микросервисот, и да ги зачува во временската база на податци.
+
+Овој микросервис работи како \texttt{consumer} во рамките на Redis stream-от \texttt{mqtt:ingestion}. Со користње на consumer group механизам се овозможува
+повеќе инстанци од истиот микросервис да читаат stream паралелно, што овозможува хоризонтално скалирање и золемена отпорност на оптоварување
+
+При читање на пораките, секој запис содржи податоци за идентификаторот на уредот, типот на метриката, измерената вредност и временската озанка. По приемот на податоците, тие се трансофрмираат во соодветен формат за TimescaleDB и се додаваат во batch, по што следи групно запишување во базата.
+\begin{minted}{python}
+def read_batch(self, batch_size: int, timeout_ms: int) -> List[StreamMessage]:
+    results = self.redis_client.xreadgroup(
+        groupname=config.consumer.group_name,
+        consumername=config.consumer.consumer_name,
+        streams={self.stream_name: ">"},
+        count=batch_size,
+        block=timeout_ms,
+    )
+    
+    messages = []
+    for stream_key, entries in results:
+        for message_id, fields in entries:
+            stream_msg = self.schema_handler.parse_stream_entry(
+                self.stream_name, message_id, fields
+            )
+            messages.append(stream_msg)
+    return messages
+\end{minted}
+
+\begin{minted}{python}
+def write_batch(self, readings: List[TelemetryReading]) -> bool:
+    session = self.SessionLocal()
+    try:
+        db_objects = [
+            Telemetry(
+                time=reading.time,
+                device_id=reading.device_id,
+                metric=reading.metric,
+                value=reading.value,
+                unit=reading.unit,
+            )
+            for reading in readings
+        ]
+        session.bulk_save_objects(db_objects)
+        session.commit()
+        return True
+    except Exception as e:
+        session.rollback()
+        return False
+\end{minted}
+
+По успешното запишување на податоците, секоја порака се означува како процесирана со механизам за потврда (acknowledgment) во Redis Streams.На овој начин се обезбедува at-least-once семантика на испорака, односно гаранција дека ниту една порака нема да биде загубена во случај на прекин на микросервисот
+
+Со одвојувањето на запишувањето како посебен микросервис, системот добива подобра структура, намалена зависност помеѓу MQTT комуникацијата и базата на податоци. \texttt{db\_write} претставува клучна врска помеѓу асинхрониот пренос преку MQTT и Redis и долгорочното складирање во TimescaleDB.
+
+\subsubsection{gpt\_service микросервис - интелигентна анализа на телемтриски податоци}
+
+Микросервисот \texttt{gpt\_service} за задача има интелигентна обработка и анализа на телеметриските податоци со помош на големи јазични модели како \texttt{GPT, Claude} или пак \texttt{DeepSeek и Qwen}. За разлика од другите микросервиси кои се во некој дел од протокот на информации, пренос, складирање или нивна трансформација, овој сервис овозможува интерпретација, анализа и генерирање на корисни заклучоци и преораки за телеметриските податоци.
+
+\texttt{gpt\_service} функциониура како независен FastAPI микросервис кој прима податоци од Микросервисот \texttt{gpt\_service} има задача да овозможи интелигентна обработка и анализа на телеметриските податоци со користење на големи јазични модели како \texttt{GPT}, \texttt{Claude}, \texttt{DeepSeek} и \texttt{Qwen}. За разлика од останатите микросервиси кои се вклучени во преносот, складирањето или трансформацијата на податоците, овој сервис овозможува нивна нтерпретација, односно автоматско извлекување заклучоци и препораки разбирливи за корисникот.
+
+\texttt{gpt\_service} функционира како независен FastAPI микросервис кој прима податоци од Django backend-от преку REST API повици. Django претходно ги селектира релевантните телеметриски вредности од базата на податоци според уред, метрика и временски интервал, ги форматира во унифицирана структура и ги испраќа кон сервисот за анализа. На овој начин се избегнува директна комуникација помеѓу AI сервисот и базата на податоци, а архитектонската поделба на одговорности останува јасна и безбедна.
+
+Анализата на податоците се извршува преку динамичко формирање на \textbf{промпт} кој ги содржи измерените вредности, временскиот опсег, како и контекстуалните информации за уредот (локација, тип на простор, активни метрики). Дополнително, за секоја метрика во системот се дефинирани оптимални, комфорни и критични вредности според релевантни стандарди за квалитет на внатрешна средина. Овие информации се вклучуваат во промптот со цел моделот да може да изврши прецизна проценка на состојбата.
+ Врз основа на овој промпт, GPT моделот генерира:
+\begin{itemize}
+    \item опис на трендовите на податоците
+    \item детекција на можни аномалии
+    \item проценка на условите во работната околина
+    \item препораки за подобрување на комфорот и здравјето на корисникот
+\end{itemize}
+
+Дополнително, сервисот овозможува и генерирање на дневни извештаи (daily briefings) кои ги комбинираат податоците од внатрешната средина, надворешните временски услови, здравствените податоци од корисникот и календарските обврски. На овој начин корисникот добива персонализирани препораки за подобрување на продуктивноста, здравјето и работната организација.
+
+Добиениот резултат од анализата се враќа кон Django backend-от, од каде што се сервира на frontend апликацијата и се прикажува како интерактивен виџет на dashboard-от.
+
+Со воведувањето на \texttt{gpt\_service} микросервисот, платформата добива дополнително ниво на интелигенција, со што класичното следење на сензорски податоци се надградува во систем кој активно асистира во донесувањето одлуки. Овој пристап овозможува не само пасивна визуелизација на податоците, туку и практична вредност преку автоматизирани интерпретации, предупредувања и персонализирани сугестии.
+
+\subsection{Frontend имплементација}
+
+Frontend апликацијата претставува главен кориснички интерфејс преку кој корисникот ја користи платформата, ги следи телеметриските податоци, пристапува до интелигентните анализи и управува со уредите и визуелните компоненти. Нејзината улога е да обезбеди интуитивен, интерактивен и прегледен приказ на сите информации што се обработуваат во backend системот, како и можност за лесна интеракција со комплексните IoT и AI функционалности.
+
+Во продолжение е прикажана архитектурата на frontend апликацијата, начинот на комуникација со backend системот, визуелизацијата на податоците, интеграцијата на GPT анализите, како и поддршката за променлив распоред и работа на различни уреди.
+
+\subsubsection{Архитектура на frontend апликацијата}
+
+Frontend апликацијата е изработена со користење на \texttt{React 19} и \texttt{TypeScript}, додека за процесот на развој, локално тестирање и билд се користи \texttt{Vite}. Апликацијата е реализирана како Single Page Application (SPA), што овозможува брза навигација и динамичко прикажување на содржината без целосно освежување на страницата.
+
+За стилизирање и визуелна конзистентност се користат \texttt{Tailwind CSS} и библиотеката со компоненти \texttt{DaisyUI}, кои овозможуваат utility-first пристап во дизајнот, брза изградба на корисничкиот интерфејс и поддршка за светол и темен режим на работа. Главната навигација е реализирана преку responsive drawer layout со странично мени, кое автоматски се адаптира за мобилни и десктоп уреди.
+
+Проектната структура е организирана во логички целини, кои ги опфаќаат посебно страниците, реупотребливите UI компоненти, custom React hooks, API клиентите за комуникација со backend системот. Со ваквата поделба се овозможува подобра прегледност на кодот, полесно одржување и можност за понатамошно проширување на апликацијата.
+
+Ваквиот архитектонски пристап обезбедува јасна поделба на одговорности, високи перформанси при работа со динамички податоци и добра скалабилност на корисничкиот интерфејс.
+
+\subsubsection{Комуникација помеѓу Frontend и Backend}
+
+Комуникацијата помеѓу frontend апликацијата и backend слојот во системот е реализиран преку REST модел, со користење на HTTP протокол и JSON формат за размена на податоци. Frontend апликаицјата е целосно одвоена од backend имплементацијата и комуницира со него исклучиво преку дефинирани API endpoints, со што се овозможува јасна логича поделба помеѓу визуелниот frontend слој и бизнис логиката во backend-от.
+
+За реализација на HTTP комуникацијата во frontend делот се користи библиотеката \textbf{Axios}, која овозможува централизирана конфигурација на сите повици кон backend-от. Централизацијата HTTP клиентот овозможува лесно менување на адресата кон API-то преку околински променливи, како и едноставно и централизирано конфигурирање на безбедносни механизми и header-и. На овај начин се избегнува дуплирање на кодот и се зголемува одржливоста.
+\begin{minted}{typescript}
+import axios from 'axios';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+
+export const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});    
+\end{minted}
+
+За управување со состојбите и асинхроните податоци се користи TanStack React Query, кој овозможува автоматско кеширање, освежување и синхронизација на податоците добиени од backend-от. Овој пристап значително ја поедноставува логиката за преземање и автоматско ракување со состојбите на вчитување (loading), грешки (error), и успешни (success) одговори, без потреба на рачна имплементација на овие механизми.
+
+React Query овозможува и автоматско периодично освежување на пдоатоците, што е доста битно кај ваквиот тип на податоци и оваа плафрома, бидејќи податоците се читаат во реално време. Во имплементацијата, поголемиото дел од телеметриските виџети се освежуваат на секои 60 секунди, што овозможува приказ на релативно свежи информации без преоптоварување на backend системот и базата на податоци. Дополнително, React Query овозможува рачно иницирање на повторно преземање на податоците од страна на корисникот, како на пример при иницирање на анализа.
+
+\begin{minted}{typescript}
+const { data, isLoading, error, refetch } = useQuery({
+  queryKey: ['telemetry', deviceId, metric],
+  queryFn: async () => {
+    const response = await telemetryApi.query(params)
+    return response.data
+  },
+  refetchInterval: 60000,
+  staleTime: 30000,
+})
+\end{minted}
+
+Справувањето со грешки и прикажувањето на состојбите на вчитување е унифицирано низ целата апликација. При секое вчитување на податоци се прижаува анимација за вчитување, додека при појава на грешка се прикажува нотификација со опис на проблемот. Овој пристап значително го подобрува корисничкото искуство и овозможува полесно справување со пролемите.
+
+\begin{minted}{tsx}
+const { data, isLoading, error } = useQuery({
+  queryKey: ['telemetry', deviceId],
+  queryFn: () => telemetryApi.getSeries(deviceId, metric),
+  refetchInterval: 60000,
+});
+
+if (isLoading) {
+  return <span className="loading loading-spinner loading-lg"></span>
+}
+
+if (error) {
+  return <div className="alert alert-error">Failed to load telemetry</div>
+}
+return <div>{data.map(item => ...)}</div>
+\end{minted}
+
+Со вака изведена комуникација помеѓу frontend и backend делот, платформата обезбедува:
+\begin{itemize}
+    \item стабилен и сигурен пренос на податоци
+    \item автоматско освежување на телеметриските информации
+    \item скалабилна обработка на AI анализи
+    \item конзистентен, интуитивен кориснички интерфејс
+\end{itemize}
+
+\subsubsection{Динамичко рендерирање на виџети и визуелзација на податоци}
+
+Со цел да се обезбеди флексибилна и проширлива визуелизација на различни типови податоци во рамките на dashboard-от, frontend делот од платформата користи динамички систем за прикажување на виџети, имплементиран преку registry и factory pattern. На овој начин се овозможува динамичко креирање и рендерирање на различни типови виџети врз основа на корисничката конфигурација. Наместо директно условно рендерирање со \texttt{if-else} или \texttt{switch} услови, секој тип на виџет се мапира кон соодветна React компонента преку централна registry структура.
+
+\begin{minted}{typescript}
+export const widgetRegistry: Record<WidgetType, ComponentType<WidgetProps>> = {
+  'line-chart': LineChartWidget,
+  'stat': StatWidget,
+  'gauge': GaugeWidget,
+  'ai-insight': AiInsightWidget,
+  'air-quality': AirQualityWidget,
+  'weather': WeatherWidget,
+  'comfort-index': ComfortIndexWidget,
+  'run-suitability': RunSuitabilityWidget,
+  'health-stats': HealthStatsWidget,
+  'calendar': CalendarWidget,
+  'daily-briefing': DailyBriefingWidget,
+}
+\end{minted}
+
+Овој пристап овозможува системот да биде модуларен, бидејќи додавање на нов тип на виџет бара само регистрација во registry-то, без промени во логиката за рендерирање.
+
+Динамичкото креирање на виџетите се извршува преку компонентата WidgetContainer, која врши lookup во registry-то и ја прикажува соодветната React компонента.
+
+\begin{minted}{tsx}
+function WidgetContainer({ config, onRemove, onEdit }: WidgetContainerProps) {
+  const WidgetComponent = widgetRegistry[config.type]
+
+  if (!WidgetComponent) {
+    return (
+      <div className="card bg-error/10">
+        <p className="text-error">Unknown widget type: {config.type}</p>
+      </div>
+    )
+  }
+
+  return <WidgetComponent config={config} />
+}
+\end{minted}
+
+Секој виџет во системот прима унифициран објект од тип \texttt{WidgetConfig}, кој ги дефинира сите потребни параметри за функционирање на виџетот: уредите кои ги користи, метриките, временскиот опсег, визуелните опции и позицијата во распоредот. Овој модел овозможува управување со сите типови на виџети без разлика на нивната конкретна намена.
+
+\begin{minted}{typescript}
+export interface WidgetConfig {
+  id: string
+  type: WidgetType
+  title: string
+  deviceIds: string[]
+  metricIds: string[]
+  timeframe: {
+    hours?: number
+    startTime?: string
+    endTime?: string
+  }
+  visualization?: {
+    colors?: string[]
+    showLegend?: boolean
+    showGrid?: boolean
+  }
+  position?: { x: number; y: number; w: number; h: number }
+}
+\end{minted}
+
+Кај графиците со повеќе метрики (на пример температура + $CO_2$ + влажност), податоците
+од повеќе API повици се спојуваат во една временска структура преку \texttt{useMemo}, при што сите метрики се усогласуваат според временска ознака, при што се усогласуваат спроед временска ознака. Ова овозможува Recharts да приже повеќе линии на иста временска оска.
+
+\begin{minted}{typescript}
+const chartData = useMemo(() => {
+  const timeMap = new Map<number, Record<string, number | string>>()
+
+  queries.forEach((query, index) => {
+    const metric = metricIds[index]
+    query.data?.forEach((point) => {
+      const timestamp = new Date(point.time).getTime()
+      
+      if (!timeMap.has(timestamp)) {
+        timeMap.set(timestamp, { 
+          time: formatTime(new Date(timestamp)),
+          timestamp 
+        })
+      }
+      timeMap.get(timestamp)![metric] = point.value
+    })
+  })
+
+  return Array.from(timeMap.values())
+    .sort((a, b) => (a.timestamp as number) - (b.timestamp as number))
+}, [queries, metricIds])
+\end{minted}
+
+Со користење на \texttt{useMemo} се елиминира непотребно рекалкуриање при секое ре-рендерирање и се подобрува перформансот при големи количини на податоци.
+
+Визуелизацијата на податоците во графикони е реализирана преку библиотеката \textbf{Recharts}, каде секоја метрика динамички се прикажува како независна линија во во \texttt{LineChart}. Бројот на линии е директно зависен од бројот на активни метрики во конфигурацијата на виџетот.
+
+\begin{minted}{tsx}
+const lines = useMemo(() => 
+  metricIds.map((metric, index) => (
+    <Line
+      key={metric}
+      type="monotone"
+      dataKey={metric}
+      stroke={colors[index % colors.length]}
+      strokeWidth={2}
+      dot={false}
+      isAnimationActive={false}
+      name={formatMetricName(metric)}
+    />
+  )),
+  [metricIds, colors]
+)
+
+return (
+  <ResponsiveContainer width="100%" height={300}>
+    <LineChart data={chartData}>
+      <CartesianGrid strokeDasharray="3 3" />
+      <XAxis dataKey="time" />
+      <YAxis />
+      <Tooltip />
+      <Legend />
+      {lines}
+    </LineChart>
+  </ResponsiveContainer>
+)
+\end{minted}
+
+Анимиациите се исклучени за подобри перформанси при работа со поголем број на точки, а боите се доделуваат циклично преку параметар.
+
+Распоредот на виџети во dashboard-от е имплементира преку \texttt{react-grid-layout}, кој овозможува слободно поместување менување на димензии и автоматско реорганизирање на елементите. Распоредот се гради динамички од \texttt{WidgetConfig.position} за секој виџет.
+
+\begin{minted}{tsx}
+const GRID_COLUMNS = 5
+const ROW_HEIGHT = 90
+const GRID_MARGIN: [number, number] = [8, 6]
+
+const layout = config.widgets.map((widget) => ({
+  i: widget.id,
+  x: widget.position?.x ?? 0,
+  y: widget.position?.y ?? Infinity,
+  w: widget.position?.w ?? 1,
+  h: widget.position?.h ?? 1,
+  minW: 1, minH: 1, maxW: GRID_COLUMNS,
+}))
+
+<GridLayout
+  layout={layout}
+  cols={GRID_COLUMNS}
+  rowHeight={ROW_HEIGHT}
+  width={gridWidth}
+  onLayoutChange={handleLayoutChange}
+  draggableHandle=".drag-handle"
+  compactType="vertical"
+  isResizable={true}
+  isDraggable={true}
+  margin={GRID_MARGIN}
+/>
+\end{minted}
+
+
+За секоја промена на позицијата или димензиите на виџетите се пресликува назад во конфигурацијата преку handleLayoutChange. Неговата состојба се зачувува:
+\begin{itemize}
+    \item локално во \texttt{localStorage} - моментално
+    \item во backend преку dashboardLayoutApi - за долгорочна перзистенција
+\end{itemize}
+
+\begin{minted}{typescript}
+const handleLayoutChange = (newLayout: GridLayout.Layout[]) => {
+  newLayout.forEach((item) => {
+    const widget = config.widgets.find((w) => w.id === item.i)
+    if (widget) {
+      updateWidget(item.i, {
+        position: { x: item.x, y: item.y, w: item.w, h: item.h },
+      })
+    }
+  })
+}
+\end{minted}
+
+Овој dual-write механизам овозможува системот да функционира и при губење на конекција, а истовремено да одржува синхронизирана состојба на распоредот меѓу сесиите.
+
+Со оваа архитектура на виџет системот, платформата обезбедува целосно динамизен, проширлив и перформантен frontend, кој овозможува визуелизација на голем волумен на временски податоци, интерактино управување со распоредот и јасна интеграција со backend-от.
