@@ -1,73 +1,111 @@
-# React + TypeScript + Vite
+# IoT Dashboard Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React-based dashboard for visualizing IoT telemetry data with customizable widgets.
 
-Currently, two official plugins are available:
+## Technology Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+| Technology | Purpose |
+|------------|---------|
+| React 19 | UI framework |
+| Vite | Build tool and dev server |
+| TypeScript | Type safety |
+| DaisyUI | Component library |
+| Tailwind CSS | Styling |
+| React Query | Data fetching and caching |
+| Recharts | Data visualization |
+| React Grid Layout | Drag-and-drop widget layout |
 
-## React Compiler
+## Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- Customizable widget-based dashboard
+- Drag-and-drop layout editing
+- Multiple widget types (weather, charts, calendar, AI briefings)
+- Responsive design
+- Dark/light theme support
 
-## Expanding the ESLint configuration
+## Widget Types
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+| Widget | Description |
+|--------|-------------|
+| WeatherWidget | Current weather and forecast |
+| AirQualityWidget | PM2.5, PM10 levels from pulse.eco |
+| ComfortIndexWidget | Indoor comfort based on temperature/humidity |
+| RunSuitabilityWidget | Outdoor running conditions analysis |
+| CalendarWidget | iCal calendar integration |
+| DailyBriefingWidget | AI-generated daily summary |
+| HealthStatsWidget | Health metrics from wearables |
+| TelemetryChartWidget | Time-series data visualization |
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Project Structure
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+frontend/
+├── src/
+│   ├── api/            # API client functions
+│   ├── components/     # React components
+│   │   ├── widgets/    # Widget components
+│   │   └── ...
+│   ├── hooks/          # Custom React hooks
+│   ├── types/          # TypeScript type definitions
+│   ├── utils/          # Utility functions
+│   ├── App.tsx         # Main application component
+│   └── main.tsx        # Entry point
+├── public/             # Static assets
+├── package.json        # Dependencies
+└── vite.config.ts      # Vite configuration
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Running
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
+Development server runs at http://localhost:5173
+
+## Configuration
+
+The frontend connects to the Django API. Configure the API URL in `vite.config.ts`:
+
+```typescript
+proxy: {
+  '/api': {
+    target: 'http://localhost:8000',
+    changeOrigin: true,
   },
-])
+}
+```
+
+## Building for Production
+
+```bash
+npm run build
+```
+
+Output is in the `dist/` directory.
+
+## Key Components
+
+| Component | Purpose |
+|-----------|---------|
+| Dashboard.tsx | Main dashboard with widget grid |
+| WidgetWrapper.tsx | Generic widget container |
+| EditWidgetModal.tsx | Widget configuration modal |
+| AddWidgetMenu.tsx | Widget type selection |
+
+## API Integration
+
+All API calls are in `src/api/index.ts`. Uses React Query for:
+- Automatic caching
+- Background refetching
+- Loading/error states
+
+Example:
+```typescript
+const { data, isLoading } = useQuery({
+  queryKey: ['weather', city],
+  queryFn: () => fetchWeather(city),
+});
 ```

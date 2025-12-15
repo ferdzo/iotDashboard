@@ -151,6 +151,11 @@ class DeviceManagerClient:
             webhook_secret=data.get("webhook_secret"),
         )
 
+    def delete_device(self, device_id: str) -> Dict[str, Any]:
+        """Delete a device and its associated certificates."""
+        response = self._request("POST", f"/devices/{device_id}/delete")
+        return response.json()
+
     def get_ca_certificate(self) -> str:
         response = self._request("GET", "/ca_certificate")
         return response.text
@@ -213,3 +218,7 @@ def revoke_certificate(device_id: str) -> Dict[str, Any]:
 
 def renew_certificate(device_id: str) -> Dict[str, Any]:
     return default_client.renew_certificate(device_id)
+
+
+def delete_device(device_id: str) -> Dict[str, Any]:
+    return default_client.delete_device(device_id)

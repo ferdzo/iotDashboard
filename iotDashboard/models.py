@@ -175,3 +175,21 @@ class Telemetry(models.Model):
     def __str__(self):
         return f"{self.device.name} - {self.metric}: {self.value} at {self.time}"
 
+
+class User(models.Model):
+    """Dashboard users for authentication (mirrors SQLAlchemy model)."""
+    
+    id = models.CharField(max_length=255, primary_key=True)
+    username = models.CharField(max_length=255, unique=True)
+    email = models.CharField(max_length=255, unique=True)
+    password_hash = models.CharField(max_length=255)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = False
+        db_table = "users"
+
+    def __str__(self):
+        return self.username
+

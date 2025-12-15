@@ -4,7 +4,7 @@ import 'gridstack/dist/gridstack.min.css'
 
 // Define the widget type based on gridstack.js structure
 export type GridStackWidget = {
-  id?: string | number
+  id?: string
   x?: number
   y?: number
   w?: number
@@ -74,7 +74,7 @@ export function useGridstack(options: UseGridstackOptions = {}) {
 
     // Handle layout change
     if (onLayoutChange) {
-      grid.on('change', (event, items) => {
+      grid.on('change', () => {
         const serialized = grid.save(false) as GridStackWidget[]
         onLayoutChange(serialized)
       })

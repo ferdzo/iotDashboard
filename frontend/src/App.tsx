@@ -1,16 +1,25 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { BrowserRouter, Routes, Route, Link, NavLink } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Link, NavLink, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { WellnessStateProvider } from './hooks/useWellnessState'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
 import Dashboard from './pages/Dashboard'
 import DeviceList from './pages/DeviceList'
 import DeviceDetail from './pages/DeviceDetail'
 import AddDevice from './pages/AddDevice'
+import Login from './pages/Login'
 import './App.css'
 
 const queryClient = new QueryClient()
 
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated } = useAuth()
+  return isAuthenticated ? <>{children}</> : <Navigate to="/login" />
+}
+
 function AppLayout({ children }: { children: React.ReactNode }) {
+  const { logout } = useAuth()
+
   return (
     <div className="drawer lg:drawer-open">
       <input id="main-drawer" type="checkbox" className="drawer-toggle" />
@@ -27,6 +36,11 @@ function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="flex-1">
             <span className="text-xl font-bold">IoT Dashboard</span>
           </div>
+          <div className="flex-none">
+            <button onClick={logout} className="btn btn-ghost btn-sm">
+              Logout
+            </button>
+          </div>
         </div>
 
         {/* Page content */}
@@ -38,7 +52,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Sidebar */}
       <div className="drawer-side">
         <label htmlFor="main-drawer" className="drawer-overlay"></label>
-        <aside className="bg-base-100 w-64 min-h-full">
+        <aside className="bg-base-100 w-64 min-h-full flex flex-col">
           <div className="p-4">
             <Link to="/" className="flex items-center gap-2 text-2xl font-bold">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -73,6 +87,15 @@ function AppLayout({ children }: { children: React.ReactNode }) {
               </NavLink>
             </li>
           </ul>
+          
+          <div className="mt-auto p-4">
+            <button onClick={logout} className="btn btn-ghost btn-sm w-full">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Logout
+            </button>
+          </div>
         </aside>
       </div>
     </div>
@@ -82,17 +105,21 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <WellnessStateProvider>
-        <BrowserRouter>
-          <Toaster position="top-right" />
-          <Routes>
-            <Route path="/" element={<AppLayout><Dashboard /></AppLayout>} />
-            <Route path="/devices" element={<AppLayout><DeviceList /></AppLayout>} />
-            <Route path="/devices/add" element={<AppLayout><AddDevice /></AppLayout>} />
-            <Route path="/devices/:id" element={<AppLayout><DeviceDetail /></AppLayout>} />
-          </Routes>
-        </BrowserRouter>
-      </WellnessStateProvider>
+      <AuthProvider>
+        <WellnessStateProvider>
+          <BrowserRouter>
+            <Toaster position="top-right" />
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/" element={<ProtectedRoute><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
+              <Route path="/dashboard" element={<ProtectedRoute><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
+              <Route path="/devices" element={<ProtectedRoute><AppLayout><DeviceList /></AppLayout></ProtectedRoute>} />
+              <Route path="/devices/add" element={<ProtectedRoute><AppLayout><AddDevice /></AppLayout></ProtectedRoute>} />
+              <Route path="/devices/:id" element={<ProtectedRoute><AppLayout><DeviceDetail /></AppLayout></ProtectedRoute>} />
+            </Routes>
+          </BrowserRouter>
+        </WellnessStateProvider>
+      </AuthProvider>
     </QueryClientProvider>
   )
 }

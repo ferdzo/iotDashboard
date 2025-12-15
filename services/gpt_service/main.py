@@ -15,12 +15,10 @@ gpt_service = None
 async def lifespan(app: FastAPI):
     """Lifespan event handler for startup and shutdown."""
     global gpt_service
-    # Startup
     logger.info("Initializing GPT Service...")
     gpt_service = GPTService()
     logger.info("GPT Service initialized successfully")
     yield
-    # Shutdown (cleanup if needed)
     logger.info("Shutting down GPT Service...")
 
 
@@ -96,10 +94,8 @@ async def analyze_telemetry(request: AnalyzeRequest):
         
         logger.info(f"Analyzing {len(request.telemetry_data)} telemetry points with prompt_type={request.prompt_type}")
         
-        # Convert Pydantic models to dicts for GPTService
         telemetry_dicts = [point.model_dump() for point in request.telemetry_data]
         
-        # Call GPT service analysis
         analysis_result = await gpt_service.analyze(
             telemetry_data=telemetry_dicts,
             device_info=request.device_info,
@@ -133,7 +129,6 @@ async def generate_daily_briefing(request: DailyBriefingRequest):
         
         logger.info(f"Generating {request.briefing_type} briefing")
         
-        # Convert calendar events to dicts
         calendar_events = None
         if request.calendar_events:
             calendar_events = [event.model_dump() for event in request.calendar_events]

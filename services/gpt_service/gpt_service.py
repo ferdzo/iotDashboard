@@ -446,7 +446,6 @@ Keep all text concise: summary under 50 words, each item under 20 words.""",
             
             context = "\n\n".join(context_sections)
             
-            # Build briefing-specific prompts
             prompts = {
                 "schedule": f"""You are a smart wellness coach for office workers (software engineers, tech/finance professionals).
 Generate a Schedule Briefing focused on calendar and activity optimization.

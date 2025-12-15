@@ -109,7 +109,7 @@ class   Telemetry(Base):
     __tablename__ = "telemetry"
 
     time = Column(DateTime(timezone=True), primary_key=True, nullable=False)
-    device_id = Column(Text, ForeignKey("devices.id"), primary_key=True, nullable=False)
+    device_id = Column(Text, ForeignKey("devices.id", ondelete="CASCADE"), primary_key=True, nullable=False)
     metric = Column(Text, primary_key=True, nullable=False)
     value = Column(Float, nullable=False)
     unit = Column(Text)
@@ -118,3 +118,24 @@ class   Telemetry(Base):
 
     def __repr__(self):
         return f"<Telemetry(device={self.device_id}, metric={self.metric}, value={self.value})>"
+
+
+class User(Base):
+    """Dashboard users for authentication."""
+
+    __tablename__ = "users"
+
+    id = Column(Text, primary_key=True)
+    username = Column(Text, unique=True, nullable=False)
+    email = Column(Text, unique=True, nullable=False)
+    password_hash = Column(Text, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_users_username", "username"),
+        Index("idx_users_email", "email"),
+    )
+
+    def __repr__(self):
+        return f"<User(username={self.username}, email={self.email})>"

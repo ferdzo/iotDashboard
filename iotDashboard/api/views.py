@@ -20,7 +20,6 @@ from iotDashboard import weather_client
 from iotDashboard.comfort_index import (
     ComfortMetrics,
     ComfortIndexCalculator,
-    calculate_comfort_index_from_telemetry,
 )
 from iotDashboard.run_suitability import (
     RunSuitabilityCalculator,
@@ -89,11 +88,18 @@ class DeviceViewSet(viewsets.ModelViewSet):
             )
     
     def destroy(self, request, pk=None):
-        """Delete a device."""
+        """Delete a device via device_manager microservice."""
         try:
             device = self.get_object()
             device_name = device.name
+            device_id = device.id
+            
+            # Call device_manager to delete device and handle certificates
+            device_manager.delete_device(device_id)
+            
+            # Delete from Django database (CASCADE will handle related records)
             device.delete()
+            
             return Response(
                 {'message': f"Device '{device_name}' deleted successfully"},
                 status=status.HTTP_204_NO_CONTENT
@@ -102,6 +108,11 @@ class DeviceViewSet(viewsets.ModelViewSet):
             return Response(
                 {'error': 'Device not found'},
                 status=status.HTTP_404_NOT_FOUND
+            )
+        except DeviceManagerAPIError as e:
+            return Response(
+                {'error': e.message, 'details': e.details},
+                status=e.status_code or status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
     @action(detail=True, methods=['post'])
@@ -298,7 +309,6 @@ class TelemetryViewSet(viewsets.ReadOnlyModelViewSet):
     
     queryset = Telemetry.objects.all()
     serializer_class = TelemetrySerializer
-    # permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
         """Filter telemetry by query parameters."""
@@ -664,9 +674,9 @@ class WellnessViewSet(viewsets.ViewSet):
             )
         
         try:
-            # Get health device
+            # Validate health device exists
             try:
-                health_device = Device.objects.get(id=health_device_id)
+                Device.objects.get(id=health_device_id)
             except Device.DoesNotExist:
                 return Response(
                     {'error': f'Health device {health_device_id} not found'},
@@ -811,9 +821,9 @@ class WellnessViewSet(viewsets.ViewSet):
             )
         
         try:
-            # Get health device
+            # Validate health device exists
             try:
-                health_device = Device.objects.get(id=health_device_id)
+                Device.objects.get(id=health_device_id)
             except Device.DoesNotExist:
                 return Response(
                     {'error': f'Health device {health_device_id} not found'},
@@ -973,7 +983,7 @@ class WellnessViewSet(viewsets.ViewSet):
                 outdoor_data['pm25'] = aq.get('measurements', {}).get('pm25', {}).get('average')
                 outdoor_data['pm10'] = aq.get('measurements', {}).get('pm10', {}).get('average')
                 outdoor_data['air_quality_status'] = aq.get('status')
-            except Exception as e:
+            except Exception:
                 pass  # Air quality optional
             
             # Gather health data if device specified
@@ -1013,7 +1023,7 @@ class WellnessViewSet(viewsets.ViewSet):
                         current_time, 
                         calendar_range_hours
                     )
-                except Exception as e:
+                except Exception:
                     pass  # Calendar optional
             
             # Call GPT service
@@ -1095,7 +1105,7 @@ class WellnessViewSet(viewsets.ViewSet):
                         continue
                     if dt.replace(tzinfo=None) > end_time.replace(tzinfo=None):
                         continue
-                except:
+                except ValueError:
                     event['start'] = 'TBD'
             
             # Extract location

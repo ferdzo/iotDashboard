@@ -113,7 +113,7 @@ export default function AddWidgetModal({ isOpen, onClose, onAdd }: AddWidgetModa
       defaultTitle = `Run Suitability - ${city}`
     } else if (widgetType === 'health-stats') {
       const selectedDevice = devices.find(d => d.id === selectedDevices[0])
-      defaultTitle = `Health StaTts - ${selectedDevice?.name || 'Device'}`
+      defaultTitle = `Health Stats - ${selectedDevice?.name || 'Device'}`
     } else if (widgetType === 'calendar') {
       defaultTitle = 'Calendar Agenda'
     } else if (widgetType === 'daily-briefing') {
