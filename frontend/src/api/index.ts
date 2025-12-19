@@ -97,6 +97,7 @@ export const telemetryApi = {
   analyze: (data: {
     device_id: string;
     metric?: string;
+    metrics?: string[];  // Support multiple metrics
     hours?: number;
     limit?: number;
     prompt_type?: 'anomaly_detection' | 'trend_summary' | 'custom';

@@ -62,8 +62,8 @@ export function useTelemetrySeries({
       return response.data as Telemetry[]
     },
     enabled,
-    refetchInterval: enabled ? 60000 : false, // Refresh every 60 seconds (reduced frequency)
-    staleTime: 30000, // Consider data fresh for 30 seconds
+    refetchInterval: enabled ? 5000 : false, // Refresh every 5 seconds
+    staleTime: 3000, // Consider data fresh for 3 seconds
   })
 
   return {

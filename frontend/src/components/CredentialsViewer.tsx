@@ -86,6 +86,87 @@ export default function CredentialsViewer({ credentials, deviceId }: Credentials
         </div>
       )}
 
+      {/* MQTT Connection Information */}
+      <div className="rounded-lg bg-info/10 border border-info/30 p-4">
+        <div className="flex items-start gap-3">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-info shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div className="flex-1">
+            <h3 className="font-semibold mb-2">Connection Configuration</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between items-center">
+                <span className="font-medium">MQTT Broker:</span>
+                <code className="bg-base-100 px-2 py-1 rounded text-xs">{mqttBroker}</code>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="font-medium">Port (TLS):</span>
+                <code className="bg-base-100 px-2 py-1 rounded text-xs">{mqttPort}</code>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="font-medium">Device ID:</span>
+                <code className="bg-base-100 px-2 py-1 rounded text-xs">{resolvedDeviceId}</code>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Publishing Guide */}
+      <div className="rounded-lg bg-primary/10 border border-primary/30 p-4">
+        <div className="flex items-start gap-3">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-primary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <div className="flex-1">
+            <h3 className="font-semibold mb-2">How to Publish Data</h3>
+            <div className="space-y-3 text-sm">
+              <div>
+                <span className="font-medium block mb-1">Topic Format:</span>
+                <code className="block bg-base-100 px-3 py-2 rounded text-xs break-all">
+                  devices/{resolvedDeviceId}/{'<metric>'}
+                </code>
+              </div>
+              
+              <div>
+                <span className="font-medium block mb-1">Payload:</span>
+                <p className="opacity-80 text-xs mb-1">Send numeric value as plain text (no JSON)</p>
+                <code className="block bg-base-100 px-3 py-2 rounded text-xs">23.5</code>
+              </div>
+              
+              <div>
+                <span className="font-medium block mb-1">Supported Metrics:</span>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {['temperature', 'humidity', 'co2', 'pm25', 'pm10', 'pressure', 'light', 'noise'].map(metric => (
+                    <span key={metric} className="badge badge-sm badge-outline">{metric}</span>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="divider my-2"></div>
+              
+              <div>
+                <span className="font-medium block mb-1">Example (mosquitto_pub):</span>
+                <code className="block bg-base-100 px-3 py-2 rounded text-xs overflow-x-auto">
+                  mosquitto_pub --cafile ca.crt --cert {resolvedDeviceId}.crt --key {resolvedDeviceId}.key \<br/>
+                  &nbsp;&nbsp;-h {mqttBroker} -p {mqttPort} \<br/>
+                  &nbsp;&nbsp;-t "devices/{resolvedDeviceId}/temperature" -m "23.5"
+                </code>
+                <button
+                  className="btn btn-xs btn-outline mt-2"
+                  onClick={() => copyToClipboard(
+                    `mosquitto_pub --cafile ca.crt --cert ${resolvedDeviceId}.crt --key ${resolvedDeviceId}.key -h ${mqttBroker} -p ${mqttPort} -t "devices/${resolvedDeviceId}/temperature" -m "23.5"`,
+                    'Example command'
+                  )}
+                >
+                  Copy Command
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {(credentials.certificate_id || expiresAt) && (
         <div className="rounded-lg bg-base-200 p-4 text-sm">
           <div className="flex flex-col gap-2">

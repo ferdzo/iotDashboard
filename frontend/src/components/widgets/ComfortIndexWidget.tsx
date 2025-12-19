@@ -69,7 +69,7 @@ export default function ComfortIndexWidget({ config }: ComfortIndexWidgetProps) 
       const response = await devicesApi.getComfortIndex(deviceId)
       return response.data
     },
-    refetchInterval: 60000, // Refresh every minute
+    refetchInterval: 5000, // Refresh every 5 seconds
     enabled: !!deviceId,
   })
 

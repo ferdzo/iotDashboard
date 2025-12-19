@@ -24,7 +24,7 @@ export default function HealthStatsWidget({ config }: HealthStatsWidgetProps) {
       const response = await wellnessApi.getHealthInsights(deviceId, widgetCity || undefined)
       return response.data
     },
-    refetchInterval: 60000, // Refresh every minute
+    refetchInterval: 5000, // Refresh every 5 seconds
     enabled: !!deviceId,
   })
 

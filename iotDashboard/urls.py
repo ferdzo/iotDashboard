@@ -30,24 +30,16 @@ urlpatterns = [
     # REST API
     path("api/", include("iotDashboard.api.urls")),
     
-    # Main dashboard
-    path("", views.chart, name="index"),
-    path("chart/", views.chart, name="chart"),
-    
-    # Device management
-    path("devices/", views.device_list, name="device_list"),
-    path("devices/add/", views.add_device, name="add_device"),
-    path("devices/<str:device_id>/", views.view_device, name="view_device"),
-    path("devices/<str:device_id>/delete/", views.delete_device, name="delete_device"),
-    
-    # Certificate management (MQTT devices only)
-    path("devices/<str:device_id>/certificate/revoke/", views.revoke_certificate, name="revoke_certificate"),
-    path("devices/<str:device_id>/certificate/renew/", views.renew_certificate, name="renew_certificate"),
-    
-    # Telemetry data API
-    path("fetch_device_data/", views.fetch_device_data, name="fetch_device_data"),
-    
-    # Legacy/utility endpoints
-    path("devices_api/", views.devices_api, name="devices_api"),
-    path("logout/", views.logout_view, name="logout"),
+    # Legacy template views - DISABLED (using React frontend)
+    # path("", views.chart, name="index"),
+    # path("chart/", views.chart, name="chart"),
+    # path("devices/", views.device_list, name="device_list"),
+    # path("devices/add/", views.add_device, name="add_device"),
+    # path("devices/<str:device_id>/", views.view_device, name="view_device"),
+    # path("devices/<str:device_id>/delete/", views.delete_device, name="delete_device"),
+    # path("devices/<str:device_id>/certificate/revoke/", views.revoke_certificate, name="revoke_certificate"),
+    # path("devices/<str:device_id>/certificate/renew/", views.renew_certificate, name="renew_certificate"),
+    # path("fetch_device_data/", views.fetch_device_data, name="fetch_device_data"),
+    # path("devices_api/", views.devices_api, name="devices_api"),
+    # path("logout/", views.logout_view, name="logout"),
 ]

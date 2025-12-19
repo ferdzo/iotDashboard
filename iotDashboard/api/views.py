@@ -408,7 +408,14 @@ class TelemetryViewSet(viewsets.ReadOnlyModelViewSet):
             time__gte=timezone.now() - timedelta(hours=hours)
         )
         
-        if metric:
+        # Support multiple metrics (comma-separated)
+        metrics = request.data.get('metrics')
+        if metrics:
+            # Multiple metrics provided as list
+            metric_list = metrics if isinstance(metrics, list) else [m.strip() for m in metrics.split(',')]
+            queryset = queryset.filter(metric__in=metric_list)
+        elif metric:
+            # Single metric (backward compatible)
             queryset = queryset.filter(metric=metric)
         
         telemetry = queryset.order_by('-time')[:limit]

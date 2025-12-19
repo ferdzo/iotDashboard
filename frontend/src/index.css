@@ -6,6 +6,14 @@
   --dui-themes: light, dark, cupcake, corporate;
 }
 
+/* Ensure full viewport height */
+html,
+body,
+#root {
+  height: 100%;
+  min-height: 100vh;
+}
+
 /* Custom scrollbar styles */
 ::-webkit-scrollbar {
   width: 8px;

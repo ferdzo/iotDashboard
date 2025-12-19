@@ -36,7 +36,7 @@ export default function RunSuitabilityWidget({ config }: RunSuitabilityWidgetPro
       const response = await wellnessApi.getRunSuitability(deviceId, widgetCity)
       return response.data
     },
-    refetchInterval: 300000, // Refresh every 5 minutes
+    refetchInterval: 5000, // Refresh every 5 seconds
     enabled: !!deviceId && !!widgetCity,
   })
 

@@ -144,7 +144,7 @@ export default function Dashboard() {
 	}
 
 	return (
-		<div className="p-6 space-y-6">
+		<div className="p-6 space-y-6 min-h-screen">
 			<div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
 				<div>
 					<h1 className="text-3xl font-bold">Dashboard</h1>
@@ -153,8 +153,14 @@ export default function Dashboard() {
 					</p>
 				</div>
 				<div className="flex flex-wrap items-center gap-2">
+					<div className="text-sm text-base-content/60">
+						<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+						</svg>
+						Auto-save enabled
+					</div>
 					<button
-						className="btn btn-success btn-sm"
+						className="btn btn-outline btn-sm"
 						onClick={handleSaveDashboard}
 						disabled={isSaving}
 					>
@@ -168,7 +174,7 @@ export default function Dashboard() {
 								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
 							</svg>
 						)}
-						Save Dashboard
+						Save Now
 					</button>
 					{saveStatus === 'success' && (
 						<span className="text-success text-sm">Saved!</span>

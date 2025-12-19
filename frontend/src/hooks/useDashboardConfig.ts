@@ -145,16 +145,41 @@ export function useDashboardConfig() {
     }
   }
 
-  // Only save to localStorage automatically (no backend saves)
+  // Auto-save to localStorage and debounced backend save
   useEffect(() => {
     if (!isInitialLoadRef.current) {
+      // Save to localStorage immediately
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(config))
       } catch (error) {
         console.error('Failed to save to localStorage:', error)
       }
+
+      // Auto-save to backend with debounce (2 seconds after last change)
+      const timeoutId = setTimeout(async () => {
+        try {
+          if (layoutId) {
+            await dashboardLayoutApi.update(layoutId, {
+              config: config,
+            })
+            console.log('Dashboard auto-saved to backend')
+          } else {
+            const response = await dashboardLayoutApi.create({
+              name: 'default',
+              config: config,
+              is_default: true,
+            })
+            setLayoutId(response.data.id)
+            console.log('Dashboard created and auto-saved to backend')
+          }
+        } catch (error) {
+          console.error('Failed to auto-save to backend:', error)
+        }
+      }, 2000)
+
+      return () => clearTimeout(timeoutId)
     }
-  }, [config])
+  }, [config, layoutId])
 
 
   const addWidget = (widget: WidgetConfig) => {

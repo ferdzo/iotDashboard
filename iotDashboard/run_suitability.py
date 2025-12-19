@@ -211,20 +211,36 @@ class RunSuitabilityCalculator:
         current_hour = current_time.hour
         recommendations = []
         
-        # Check if current time is in optimal range
+        # Check if current time is in an optimal range
+        in_optimal_time = False
         for start_time, end_time, description in RunSuitabilityCalculator.BEST_TIMES:
             if start_time.hour <= current_hour < end_time.hour:
                 recommendations.append(f"Current time is ideal: {description}")
-            else:
-                # Calculate hours until next optimal time
+                in_optimal_time = True
+                break
+        
+        if not in_optimal_time:
+            # Find next optimal time window
+            next_window = None
+            for start_time, end_time, description in RunSuitabilityCalculator.BEST_TIMES:
                 if current_hour < start_time.hour:
+                    # This window is later today
                     hours_until = start_time.hour - current_hour
-                    recommendations.append(f"Best time in {hours_until} hours ({start_time.strftime('%I:%M %p')}): {description}")
-                elif current_hour >= end_time.hour:
-                    # Next optimal time is tomorrow
-                    next_start = RunSuitabilityCalculator.BEST_TIMES[0][0] if start_time == RunSuitabilityCalculator.BEST_TIMES[-1][0] else RunSuitabilityCalculator.BEST_TIMES[1][0]
-                    hours_until = (24 - current_hour) + next_start.hour
-                    recommendations.append(f"Best time in {hours_until} hours ({next_start.strftime('%I:%M %p')}): {description}")
+                    next_window = (hours_until, start_time, description, "today")
+                    break
+            
+            # If no window found later today, next window is tomorrow morning
+            if next_window is None:
+                first_start, _, first_desc = RunSuitabilityCalculator.BEST_TIMES[0]
+                hours_until = (24 - current_hour) + first_start.hour
+                next_window = (hours_until, first_start, first_desc, "tomorrow")
+            
+            if next_window:
+                hours_until, next_start, description, when = next_window
+                recommendations.append(
+                    f"Next optimal time: {next_start.strftime('%I:%M %p')} {when} "
+                    f"(in {hours_until} hours) - {description}"
+                )
         
         return recommendations
     

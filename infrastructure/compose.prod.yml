@@ -15,7 +15,7 @@ services:
       - "9001:9001"
       - "8883:8883"
     volumes:
-      - ./mosquitto/:/mosquitto/
+      - ./mosquitto/:/mosquitto/:Z
     restart: unless-stopped
   
   timescaledb:
@@ -36,12 +36,14 @@ services:
       retries: 5
 
   device-manager:
-    build:
-      context: ../services/device_manager
+    image: git.ferdzo.xyz/ferdzo/lyncis/device-manager:latest
     ports:
       - "8000:8000"
-    env_file:
-      - ../services/device_manager/.env
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-example}@timescaledb:5432/${POSTGRES_DB:-iot_data}
+      - CA_CERT_PATH=/app/certs/ca.crt
+      - CA_KEY_PATH=/app/certs/ca.key
+      - CRL_PATH=/app/certs/ca.crl
     volumes:
       - ./mosquitto/certs:/app/certs:z
     depends_on:
@@ -50,20 +52,32 @@ services:
     restart: unless-stopped
 
   mqtt-ingestion:
-    build: 
-      context: ../services/mqtt_ingestion
-    env_file:
-      - .env.mqi
+    image: git.ferdzo.xyz/ferdzo/lyncis/mqtt-ingestion:latest
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - MQTT_BROKER=mosquitto
+      - MQTT_PORT=1883
+      - MQTT_USER=${MQTT_USER:-}
+      - MQTT_PASS=${MQTT_PASS:-}
     depends_on:
       - mosquitto
       - redis
     restart: unless-stopped
 
   db-write:
-    build: 
-      context: ../services/db_write
-    env_file:
-      - .env.dbw
+    image: git.ferdzo.xyz/ferdzo/lyncis/db-write:latest
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-example}@timescaledb:5432/${POSTGRES_DB:-iot_data}
+      - CONSUMER_GROUP_NAME=db_writer
+      - CONSUMER_NAME=worker-01
+      - BATCH_SIZE=100
+      - BATCH_TIMEOUT_SEC=5
+      - STREAM_PATTERN=mqtt_stream:*
     depends_on:
       timescaledb:
         condition: service_healthy
@@ -84,7 +98,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-example}
       - POSTGRES_DB=${POSTGRES_DB:-iot_data}
       - DEVICE_MANAGER_URL=http://device-manager:8000
-      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}6                                       
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
       - DEBUG=False
       - ALLOWED_HOSTS=*
     depends_on:
@@ -95,18 +109,11 @@ services:
     restart: unless-stopped
 
   frontend:
-    build:
-      context: ../frontend
-      dockerfile: Dockerfile
-      args:
-        VITE_API_URL: /api
-        VITE_DEVICE_MANAGER_URL: ${VITE_DEVICE_MANAGER_URL:-http://localhost/api}
-        VITE_MQTT_BROKER: ${VITE_MQTT_BROKER:-localhost}
-        VITE_MQTT_PORT: ${VITE_MQTT_PORT:-8883}
+    image: git.ferdzo.xyz/ferdzo/lyncis/frontend:latest
     ports:
       - "80:80"
     depends_on:
-      - django
+      - backend
     restart: unless-stopped
 
   gpt-service:
@@ -116,7 +123,6 @@ services:
     ports:
       - "8001:8001"
     restart: unless-stopped
-
 
 volumes:
   redis-data:

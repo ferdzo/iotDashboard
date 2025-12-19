@@ -17,7 +17,7 @@ export default function AirQualityWidget({ config }: AirQualityWidgetProps) {
       const response = await weatherApi.getAirQuality(city)
       return response.data
     },
-    refetchInterval: 300000, // Refresh every 5 minutes
+    refetchInterval: 5000, // Refresh every 5 seconds
     staleTime: 240000, // Consider fresh for 4 minutes
   })
 

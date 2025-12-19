@@ -45,7 +45,7 @@ export default function AiInsightWidget({ config }: AiInsightWidgetProps) {
   const [showAnalysis, setShowAnalysis] = useState(false)
 
   const deviceId = deviceIds[0]
-  const metric = metricIds[0]
+  const metrics = metricIds  // Use ALL selected metrics
 
   const {
     data: analysis,
@@ -53,11 +53,11 @@ export default function AiInsightWidget({ config }: AiInsightWidgetProps) {
     refetch,
     error,
   } = useQuery({
-    queryKey: ['ai-insight', deviceId, metric, promptType, timeframe],
+    queryKey: ['ai-insight', deviceId, metrics, promptType, timeframe],
     queryFn: async () => {
       const response = await telemetryApi.analyze({
         device_id: deviceId,
-        metric,
+        metrics: metrics,  // Send all metrics
         hours: timeframe.hours || 240,
         limit: 200,
         prompt_type: promptType,

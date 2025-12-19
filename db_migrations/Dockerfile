@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY pyproject.toml ./
 
-RUN uv sync
+RUN uv sync --no-cache
 
 COPY . .
 
