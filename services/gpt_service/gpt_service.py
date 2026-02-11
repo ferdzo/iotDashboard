@@ -405,7 +405,7 @@ Keep all text concise: summary under 50 words, each item under 20 words.""",
             try:
                 dt = datetime.fromisoformat(current_time.replace('Z', '+00:00'))
                 time_str = dt.strftime("%A, %B %d at %I:%M %p")
-            except:
+            except (ValueError, AttributeError):
                 time_str = current_time
             context_sections.append(f"Current Time: {time_str}")
             
