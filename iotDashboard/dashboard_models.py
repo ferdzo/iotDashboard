@@ -10,7 +10,6 @@ PostgreSQL is chosen over Redis because:
 """
 
 from django.db import models
-from django.utils import timezone
 
 
 class DashboardLayout(models.Model):

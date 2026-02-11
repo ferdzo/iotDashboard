@@ -26,7 +26,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'iotDashboard.settings')
 # Import Django settings and configure password hasher manually
 from django.conf import settings
 if not settings.configured:
-    from iotDashboard.settings import *
+    from iotDashboard.settings import SECRET_KEY
     settings.configure(
         PASSWORD_HASHERS=[
             'django.contrib.auth.hashers.PBKDF2PasswordHasher',

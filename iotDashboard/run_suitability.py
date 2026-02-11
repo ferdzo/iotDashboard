@@ -5,7 +5,7 @@ Combines weather, air quality, and health data to determine if conditions are su
 Provides time-based recommendations and personalized insights.
 """
 
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime, time
 
