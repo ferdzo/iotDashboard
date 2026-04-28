@@ -1,0 +1,402 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { BrowserRouter, Routes, Route, Link, NavLink } from 'react-router-dom'
+import { Toaster } from 'react-hot-toast'
+import Dashboard from './pages/Dashboard'
+import DeviceList from './pages/DeviceList'
+import DeviceDetail from './pages/DeviceDetail'
+import AddDevice from './pages/AddDevice'
+import './App.css'
+
+const queryClient = new QueryClient()
+
+function AppLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="drawer lg:drawer-open">
+      <input id="main-drawer" type="checkbox" className="drawer-toggle" />
+      <div className="drawer-content flex flex-col">
+        {/* Navbar */}
+        <div className="navbar bg-base-300 lg:hidden">
+          <div className="flex-none">
+            <label htmlFor="main-drawer" className="btn btn-square btn-ghost">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="inline-block w-5 h-5 stroke-current">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path>
+              </svg>
+            </label>
+          </div>
+          <div className="flex-1">
+            <span className="text-xl font-bold">IoT Dashboard</span>
+          </div>
+        </div>
+
+        {/* Page content */}
+        <main className="flex-1 bg-base-200">
+          {children}
+        </main>
+      </div>
+
+      {/* Sidebar */}
+      <div className="drawer-side">
+        <label htmlFor="main-drawer" className="drawer-overlay"></label>
+        <aside className="bg-base-100 w-64 min-h-full">
+          <div className="p-4">
+            <Link to="/" className="flex items-center gap-2 text-2xl font-bold">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+              </svg>
+              <span>IoT Dashboard</span>
+            </Link>
+          </div>
+
+          <ul className="menu p-4 space-y-2">
+            <li>
+              <NavLink
+                to="/"
+                className={({ isActive }) => isActive ? 'active' : ''}
+                end
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+                Dashboard
+              </NavLink>
+            </li>
+            <li>
+              <NavLink
+                to="/devices"
+                className={({ isActive }) => isActive ? 'active' : ''}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                </svg>
+                Devices
+              </NavLink>
+            </li>
+          </ul>
+        </aside>
+      </div>
+    </div>
+  )
+}
+
+function App() {
+    queryKey: ['dashboard'],
+    queryFn: async () => {
+      const response = await dashboardApi.getOverview()
+      return response.data
+    },
+  })
+
+  const { data: devices, isLoading: devicesLoading } = useQuery({
+    queryKey: ['devices'],
+    queryFn: async () => {
+      const response = await devicesApi.getAll()
+      return response.data
+    },
+  })
+
+  if (overviewLoading || devicesLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <span className="loading loading-spinner loading-lg text-primary"></span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="drawer lg:drawer-open">
+      <input id="drawer" type="checkbox" className="drawer-toggle" />
+      
+      <div className="drawer-content flex flex-col">
+        {/* Navbar */}
+        <div className="navbar bg-base-100 shadow-lg">
+          <div className="flex-none lg:hidden">
+            <label htmlFor="drawer" className="btn btn-square btn-ghost">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="inline-block w-6 h-6 stroke-current">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path>
+              </svg>
+            </label>
+          </div>
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold ml-2">IoT Dashboard</h1>
+          </div>
+          <div className="flex-none gap-2">
+            <div className="dropdown dropdown-end">
+              <div tabIndex={0} role="button" className="btn btn-ghost btn-circle avatar">
+                <div className="w-10 rounded-full bg-primary text-primary-content flex items-center justify-center">
+                  <span className="text-xl">U</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="p-4 md:p-8">
+          {/* Breadcrumbs */}
+          <div className="text-sm breadcrumbs mb-4">
+            <ul>
+              <li><a>Home</a></li>
+              <li>Dashboard</li>
+            </ul>
+          </div>
+
+          {/* Page Header */}
+          <div className="mb-6">
+            <h2 className="text-3xl font-bold">Dashboard Overview</h2>
+            <p className="text-base-content/70 mt-1">
+              Office Environment Intelligence Platform
+            </p>
+          </div>
+
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div className="stats shadow">
+              <div className="stat">
+                <div className="stat-figure text-primary">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="inline-block w-8 h-8 stroke-current">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                </div>
+                <div className="stat-title">Total Devices</div>
+                <div className="stat-value text-primary">{overview?.total_devices || 0}</div>
+                <div className="stat-desc">Registered in system</div>
+              </div>
+            </div>
+
+            <div className="stats shadow">
+              <div className="stat">
+                <div className="stat-figure text-success">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="inline-block w-8 h-8 stroke-current">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div className="stat-title">Active Devices</div>
+                <div className="stat-value text-success">{overview?.active_devices || 0}</div>
+                <div className="stat-desc">Currently online</div>
+              </div>
+            </div>
+
+            <div className="stats shadow">
+              <div className="stat">
+                <div className="stat-figure text-secondary">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="inline-block w-8 h-8 stroke-current">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+                  </svg>
+                </div>
+                <div className="stat-title">MQTT Devices</div>
+                <div className="stat-value text-secondary">{overview?.mqtt_devices || 0}</div>
+                <div className="stat-desc">Using mTLS</div>
+              </div>
+            </div>
+
+            <div className="stats shadow">
+              <div className="stat">
+                <div className="stat-figure text-warning">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="inline-block w-8 h-8 stroke-current">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <div className="stat-title">Expiring Soon</div>
+                <div className="stat-value text-warning">{overview?.certificates_expiring_soon || 0}</div>
+                <div className="stat-desc">Certificates need renewal</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Devices Section */}
+          <div className="card bg-base-100 shadow-xl">
+            <div className="card-body">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="card-title text-2xl">Devices</h2>
+                <button className="btn btn-primary btn-sm">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Device
+                </button>
+              </div>
+              
+              {devices && devices.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {devices.map((device: Device) => (
+                    <div key={device.id} className="card bg-base-200 shadow-md hover:shadow-xl transition-shadow">
+                      <div className="card-body">
+                        <div className="flex justify-between items-start">
+                          <h3 className="card-title text-lg">{device.name}</h3>
+                          <div className={`badge ${device.is_active ? 'badge-success' : 'badge-ghost'}`}>
+                            {device.is_active ? 'Active' : 'Inactive'}
+                          </div>
+                        </div>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold">ID:</span>
+                            <code className="bg-base-300 px-2 py-1 rounded">{device.id}</code>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold">Protocol:</span>
+                            <div className="badge badge-outline">{device.protocol.toUpperCase()}</div>
+                          </div>
+                          {device.location && (
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold">Location:</span>
+                              <span>{device.location}</span>
+                            </div>
+                          )}
+                          {device.certificate_status && (
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold">Certificate:</span>
+                              <div className={`badge ${
+                                device.certificate_status === 'Valid' ? 'badge-success' :
+                                device.certificate_status === 'Expiring Soon' ? 'badge-warning' :
+                                'badge-error'
+                              }`}>
+                                {device.certificate_status}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <div className="card-actions justify-end mt-4">
+                          <button className="btn btn-sm btn-ghost">View</button>
+                          <button className="btn btn-sm btn-primary">Manage</button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="alert">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="stroke-info shrink-0 w-6 h-6">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                  <span>No devices registered yet. Add your first device to get started!</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Recent Telemetry */}
+          {overview && overview.recent_telemetry.length > 0 && (
+            <div className="card bg-base-100 shadow-xl mt-8">
+              <div className="card-body">
+                <h2 className="card-title text-2xl mb-4">Recent Telemetry</h2>
+                <div className="overflow-x-auto">
+                  <table className="table table-zebra">
+                    <thead>
+                      <tr>
+                        <th>Device</th>
+                        <th>Metric</th>
+                        <th>Value</th>
+                        <th>Time</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {overview.recent_telemetry.map((t: { device_name: string; device_id: string; metric: string; value: number; unit?: string; time: string }, idx: number) => (
+                        <tr key={idx} className="hover">
+                          <td>
+                            <div className="font-bold">{t.device_name}</div>
+                            <div className="text-sm opacity-50">{t.device_id}</div>
+                          </td>
+                          <td>
+                            <div className="badge badge-ghost">{t.metric}</div>
+                          </td>
+                          <td className="font-mono font-semibold">
+                            {t.value} {t.unit || ''}
+                          </td>
+                          <td className="text-sm opacity-70">
+                            {new Date(t.time).toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Drawer Sidebar */}
+      <div className="drawer-side z-10">
+        <label htmlFor="drawer" className="drawer-overlay"></label>
+        <aside className="bg-base-200 w-64 min-h-screen">
+          <div className="p-4">
+            <h2 className="text-xl font-bold mb-4">IoT Dashboard</h2>
+          </div>
+          <ul className="menu p-4 text-base-content">
+            <li>
+              <a className="active">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+                Dashboard
+              </a>
+            </li>
+            <li>
+              <a>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                Devices
+              </a>
+            </li>
+            <li>
+              <a>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                Analytics
+              </a>
+            </li>
+            <li>
+              <a>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                </svg>
+                AI Assistant
+              </a>
+            </li>
+            <li className="menu-title">
+              <span>Management</span>
+            </li>
+            <li>
+              <a>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Reports
+              </a>
+            </li>
+            <li>
+              <a>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Settings
+              </a>
+            </li>
+          </ul>
+        </aside>
+      </div>
+    </div>
+  )
+}
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <Toaster position="top-right" />
+        <Routes>
+          <Route path="/" element={<AppLayout><Dashboard /></AppLayout>} />
+          <Route path="/devices" element={<AppLayout><DeviceList /></AppLayout>} />
+          <Route path="/devices/add" element={<AppLayout><AddDevice /></AppLayout>} />
+          <Route path="/devices/:id" element={<AppLayout><DeviceDetail /></AppLayout>} />
+        </Routes>
+      </BrowserRouter>
+    </QueryClientProvider>
+  )
+}
+
+export default App

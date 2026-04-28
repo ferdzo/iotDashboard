@@ -16,30 +16,30 @@ Including another URLconf
 """
 
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, include
 from iotDashboard import views
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     
-    # Main dashboard
-    path("", views.chart, name="index"),
-    path("chart/", views.chart, name="chart"),
+    # JWT Authentication
+    path("api/auth/login/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("api/auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     
-    # Device management
-    path("devices/", views.device_list, name="device_list"),
-    path("devices/add/", views.add_device, name="add_device"),
-    path("devices/<str:device_id>/", views.view_device, name="view_device"),
-    path("devices/<str:device_id>/delete/", views.delete_device, name="delete_device"),
+    # REST API
+    path("api/", include("iotDashboard.api.urls")),
     
-    # Certificate management (MQTT devices only)
-    path("devices/<str:device_id>/certificate/revoke/", views.revoke_certificate, name="revoke_certificate"),
-    path("devices/<str:device_id>/certificate/renew/", views.renew_certificate, name="renew_certificate"),
-    
-    # Telemetry data API
-    path("fetch_device_data/", views.fetch_device_data, name="fetch_device_data"),
-    
-    # Legacy/utility endpoints
-    path("devices_api/", views.devices_api, name="devices_api"),
-    path("logout/", views.logout_view, name="logout"),
+    # Legacy template views - DISABLED (using React frontend)
+    # path("", views.chart, name="index"),
+    # path("chart/", views.chart, name="chart"),
+    # path("devices/", views.device_list, name="device_list"),
+    # path("devices/add/", views.add_device, name="add_device"),
+    # path("devices/<str:device_id>/", views.view_device, name="view_device"),
+    # path("devices/<str:device_id>/delete/", views.delete_device, name="delete_device"),
+    # path("devices/<str:device_id>/certificate/revoke/", views.revoke_certificate, name="revoke_certificate"),
+    # path("devices/<str:device_id>/certificate/renew/", views.renew_certificate, name="renew_certificate"),
+    # path("fetch_device_data/", views.fetch_device_data, name="fetch_device_data"),
+    # path("devices_api/", views.devices_api, name="devices_api"),
+    # path("logout/", views.logout_view, name="logout"),
 ]

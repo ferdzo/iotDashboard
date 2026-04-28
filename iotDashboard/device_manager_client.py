@@ -16,6 +16,7 @@ class DeviceRegistrationResponse:
     certificate_pem: Optional[str] = None
     private_key_pem: Optional[str] = None
     expires_at: Optional[datetime] = None
+    onboarding_token: Optional[str] = None  # One-time token for secure onboarding
     credential_id: Optional[str] = None
     api_key: Optional[str] = None
     webhook_secret: Optional[str] = None
@@ -92,6 +93,7 @@ class DeviceManagerClient:
             certificate_pem=data.get("certificate_pem"),
             private_key_pem=data.get("private_key_pem"),
             expires_at=datetime.fromisoformat(data["expires_at"].replace("Z", "+00:00")) if data.get("expires_at") else None,
+            onboarding_token=data.get("onboarding_token"),
             credential_id=data.get("credential_id"),
             api_key=data.get("api_key"),
             webhook_secret=data.get("webhook_secret"),
@@ -149,6 +151,11 @@ class DeviceManagerClient:
             webhook_secret=data.get("webhook_secret"),
         )
 
+    def delete_device(self, device_id: str) -> Dict[str, Any]:
+        """Delete a device and its associated certificates."""
+        response = self._request("POST", f"/devices/{device_id}/delete")
+        return response.json()
+
     def get_ca_certificate(self) -> str:
         response = self._request("GET", "/ca_certificate")
         return response.text
@@ -156,6 +163,26 @@ class DeviceManagerClient:
     def get_crl(self) -> str:
         response = self._request("GET", "/crl")
         return response.text
+
+    def get_device_credentials(self, device_id: str, token: str) -> DeviceRegistrationResponse:
+        """Fetch device credentials using one-time onboarding token."""
+        response = self._request("GET", f"/devices/{device_id}/credentials", params={"token": token})
+        data = response.json()
+        
+        # DeviceCertificateResponse from FastAPI doesn't include protocol
+        # We'll use "mqtt" as default since credentials endpoint is only for MQTT devices
+        return DeviceRegistrationResponse(
+            device_id=data["device_id"],
+            protocol="mqtt",  # Credentials endpoint is only for MQTT devices
+            certificate_id=data.get("certificate_id"),
+            ca_certificate_pem=data.get("ca_certificate_pem"),
+            certificate_pem=data.get("certificate_pem"),
+            private_key_pem=data.get("private_key_pem"),
+            expires_at=datetime.fromisoformat(data["expires_at"].replace("Z", "+00:00")) if data.get("expires_at") else None,
+            credential_id=None,
+            api_key=None,
+            webhook_secret=None,
+        )
 
     def health_check(self) -> bool:
         try:
@@ -191,3 +218,7 @@ def revoke_certificate(device_id: str) -> Dict[str, Any]:
 
 def renew_certificate(device_id: str) -> Dict[str, Any]:
     return default_client.renew_certificate(device_id)
+
+
+def delete_device(device_id: str) -> Dict[str, Any]:
+    return default_client.delete_device(device_id)

@@ -180,14 +180,25 @@ def view_device(request, device_id):
 
 
 def delete_device(request, device_id):
-    """Delete a device."""
+    """Delete a device via device_manager microservice."""
     try:
         device = Device.objects.get(id=device_id)
         
         if request.method == "POST":
             device_name = device.name
-            device.delete()
-            messages.success(request, f"Device '{device_name}' deleted successfully")
+            
+            try:
+                # Call device_manager to delete device and handle certificates
+                device_manager.delete_device(device_id)
+                
+                # Delete from Django database (CASCADE will handle related records)
+                device.delete()
+                
+                messages.success(request, f"Device '{device_name}' deleted successfully")
+            except DeviceManagerAPIError as e:
+                messages.error(request, f"Failed to delete device: {e.message}")
+                return redirect("device_list")
+            
             return redirect("device_list")
         
         return render(request, "device_confirm_delete.html", {"device": device})
@@ -261,3 +272,7 @@ def devices_api(request):
     """JSON API endpoint for devices."""
     devices = list(Device.objects.all().values("id", "name", "protocol", "location"))
     return JsonResponse(devices, safe=False)
+
+def analyze_data(request):
+    """Calling the GPT Service to analyze the data."""
+    

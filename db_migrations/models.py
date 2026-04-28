@@ -78,7 +78,30 @@ class DeviceCredential(Base):
         return f"<DeviceCredential(id={self.id}, device_id={self.device_id}, type={self.credential_type})>"
 
 
-class Telemetry(Base):
+class DeviceOnboardingToken(Base):
+    """One-time tokens for secure device onboarding via QR code."""
+
+    __tablename__ = "device_onboarding_tokens"
+
+    token = Column(Text, primary_key=True)
+    device_id = Column(
+        Text, ForeignKey("devices.id", ondelete="CASCADE"), nullable=False
+    )
+    certificate_id = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True))
+
+    __table_args__ = (
+        Index("idx_onboarding_tokens_device_id", "device_id"),
+        Index("idx_onboarding_tokens_expires", "expires_at"),
+    )
+
+    def __repr__(self):
+        return f"<DeviceOnboardingToken(device_id={self.device_id}, used={self.used_at is not None})>"
+
+
+class   Telemetry(Base):
     """
     Time-series telemetry data from devices.
     """
@@ -86,7 +109,7 @@ class Telemetry(Base):
     __tablename__ = "telemetry"
 
     time = Column(DateTime(timezone=True), primary_key=True, nullable=False)
-    device_id = Column(Text, ForeignKey("devices.id"), primary_key=True, nullable=False)
+    device_id = Column(Text, ForeignKey("devices.id", ondelete="CASCADE"), primary_key=True, nullable=False)
     metric = Column(Text, primary_key=True, nullable=False)
     value = Column(Float, nullable=False)
     unit = Column(Text)
@@ -95,3 +118,24 @@ class Telemetry(Base):
 
     def __repr__(self):
         return f"<Telemetry(device={self.device_id}, metric={self.metric}, value={self.value})>"
+
+
+class User(Base):
+    """Dashboard users for authentication."""
+
+    __tablename__ = "users"
+
+    id = Column(Text, primary_key=True)
+    username = Column(Text, unique=True, nullable=False)
+    email = Column(Text, unique=True, nullable=False)
+    password_hash = Column(Text, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_users_username", "username"),
+        Index("idx_users_email", "email"),
+    )
+
+    def __repr__(self):
+        return f"<User(username={self.username}, email={self.email})>"

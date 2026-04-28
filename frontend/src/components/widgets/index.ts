@@ -1,0 +1,7 @@
+export { default as WidgetContainer } from './WidgetContainer'
+export { default as LineChartWidget } from './LineChartWidget'
+export { default as StatWidget } from './StatWidget'
+export { default as GaugeWidget } from './GaugeWidget'
+export { default as AiInsightWidget } from './AiInsightWidget'
+export { default as CalendarWidget } from './CalendarWidget'
+export { widgetRegistry } from './registry'

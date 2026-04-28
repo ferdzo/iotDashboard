@@ -1,3 +1,5 @@
 mosquitto/certs/
 mosquitto/data/
 mosquitto/logs/
+.env
+.env*

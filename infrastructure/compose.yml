@@ -8,14 +8,14 @@ services:
       - redis-data:/data
     restart: unless-stopped
   
-  mqtt:
+  mosquitto:
     image: eclipse-mosquitto:2.0
     ports:
       - "1883:1883"
       - "9001:9001"
       - "8883:8883"
     volumes:
-      - ./mosquitto/:/mosquitto/:Z
+      - ./mosquitto/:/mosquitto/
     restart: unless-stopped
   
   timescaledb:
@@ -29,6 +29,94 @@ services:
     volumes:
       - timescaledb-data:/var/lib/postgresql/data
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  device-manager:
+    build:
+      context: ../services/device_manager
+    ports:
+      - "8000:8000"
+    env_file:
+      - ../services/device_manager/.env
+    volumes:
+      - ./mosquitto/certs:/app/certs:z
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mqtt-ingestion:
+    build: 
+      context: ../services/mqtt_ingestion
+    env_file:
+      - .env.mqi
+    depends_on:
+      - mosquitto
+      - redis
+    restart: unless-stopped
+
+  db-write:
+    build: 
+      context: ../services/db_write
+    env_file:
+      - .env.dbw
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      mqtt-ingestion:
+        condition: service_started
+    restart: unless-stopped
+
+  backend:
+    image: git.ferdzo.xyz/ferdzo/lyncis/backend:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - POSTGRES_HOST=timescaledb
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-example}
+      - POSTGRES_DB=${POSTGRES_DB:-iot_data}
+      - DEVICE_MANAGER_URL=http://device-manager:8000
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}6                                       
+      - DEBUG=False
+      - ALLOWED_HOSTS=*
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      device-manager:
+        condition: service_started
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api
+        VITE_DEVICE_MANAGER_URL: ${VITE_DEVICE_MANAGER_URL:-http://localhost/api}
+        VITE_MQTT_BROKER: ${VITE_MQTT_BROKER:-localhost}
+        VITE_MQTT_PORT: ${VITE_MQTT_PORT:-8883}
+    ports:
+      - "80:80"
+    depends_on:
+      - django
+    restart: unless-stopped
+
+  gpt-service:
+    image: git.ferdzo.xyz/ferdzo/lyncis-gpt-service:latest
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    ports:
+      - "8001:8001"
+    restart: unless-stopped
+
 
 volumes:
   redis-data:

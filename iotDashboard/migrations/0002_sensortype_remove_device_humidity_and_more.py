@@ -10,73 +10,8 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.CreateModel(
-            name="SensorType",
-            fields=[
-                (
-                    "id",
-                    models.BigAutoField(
-                        auto_created=True,
-                        primary_key=True,
-                        serialize=False,
-                        verbose_name="ID",
-                    ),
-                ),
-                ("name", models.CharField(max_length=50, unique=True)),
-                ("unit", models.CharField(max_length=20)),
-                (
-                    "protocol",
-                    models.CharField(
-                        choices=[("mqtt", "MQTT"), ("http", "HTTP")], max_length=20
-                    ),
-                ),
-                ("topic", models.CharField(blank=True, max_length=100, null=True)),
-                ("endpoint", models.CharField(blank=True, max_length=100, null=True)),
-            ],
-        ),
-        migrations.RemoveField(
-            model_name="device",
-            name="humidity",
-        ),
-        migrations.RemoveField(
-            model_name="device",
-            name="temperature",
-        ),
-        migrations.AlterField(
-            model_name="device",
-            name="protocol",
-            field=models.CharField(
-                choices=[("mqtt", "MQTT"), ("http", "HTTP")], max_length=20
-            ),
-        ),
-        migrations.CreateModel(
-            name="Sensor",
-            fields=[
-                (
-                    "id",
-                    models.BigAutoField(
-                        auto_created=True,
-                        primary_key=True,
-                        serialize=False,
-                        verbose_name="ID",
-                    ),
-                ),
-                ("enabled", models.BooleanField(default=True)),
-                (
-                    "device",
-                    models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE,
-                        related_name="sensors",
-                        to="iotDashboard.device",
-                    ),
-                ),
-                (
-                    "type",
-                    models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE,
-                        to="iotDashboard.sensortype",
-                    ),
-                ),
-            ],
-        ),
+        # Note: Device model is now managed=False, so we don't modify it in migrations
+        # SensorType and Sensor models are also not in current models.py
+        # This migration is kept for historical reference but operations are removed
+        # to prevent errors with managed=False models
     ]
