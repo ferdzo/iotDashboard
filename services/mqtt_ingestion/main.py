@@ -3,6 +3,8 @@ import signal
 import sys
 from src.mqtt_client import MQTTClient
 from src.redis_writer import RedisWriter
+from src.config import config
+from src.registry import DeviceRegistry
 
 logging.basicConfig(
     level=getattr(logging, "INFO"),
@@ -16,6 +18,7 @@ class MQTTIngestionService:
         self.running = False
         self.redis_writer = None
         self.mqtt_client = None
+        self.registry = None
 
         signal.signal(signal.SIGTERM, self._signal_handler)
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -43,7 +46,12 @@ class MQTTIngestionService:
         try:
             self.redis_writer = RedisWriter()
 
-            self.mqtt_client = MQTTClient(self._handle_sensor_data)
+            self.registry = DeviceRegistry(database_url=config.database.url)
+
+            self.mqtt_client = MQTTClient(
+                self._handle_sensor_data,
+                device_validator=self.registry.is_known,
+            )
 
             if not self.mqtt_client.connect():
                 logger.error("Failed to connect to MQTT, exiting")

@@ -8,12 +8,20 @@ logger = logging.getLogger(__name__)
 
 
 class MQTTClient:
-    def __init__(self, message_handler: Callable[[str, str, float], None]):
+    def __init__(
+        self,
+        message_handler: Callable[[str, str, float], None],
+        device_validator: Callable[[str], bool] = None,
+    ):
         """
         Args:
             message_handler: Function that takes (device_id, sensor_type, value)
+            device_validator: Optional predicate taking device_id; messages from
+                devices it rejects are dropped before dispatch.
         """
         self.message_handler = message_handler
+        self.device_validator = device_validator
+        self.dropped_total = 0
         self.client = mqtt.Client()
         self._setup_callbacks()
 
@@ -43,6 +51,14 @@ class MQTTClient:
             device_id = topic_parts[1]
             sensor_type = topic_parts[2]
 
+            if self.device_validator is not None and not self.device_validator(device_id):
+                self.dropped_total += 1
+                logger.warning(
+                    f"Dropping message from unknown/inactive device: {device_id} "
+                    f"(dropped_total={self.dropped_total})"
+                )
+                return
+
             try:
                 value = float(msg.payload.decode())
             except ValueError:
@@ -69,6 +85,8 @@ class MQTTClient:
                     return False
                 self.client.tls_set(
                     ca_certs=config.mqtt.ca_cert,
+                    certfile=config.mqtt.client_cert,
+                    keyfile=config.mqtt.client_key,
                     tls_version=ssl.PROTOCOL_TLS_CLIENT,
                 )
             self.client.connect(
