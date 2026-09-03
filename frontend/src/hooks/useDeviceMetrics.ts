@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { devicesApi, telemetryApi } from '../api'
+import { devicesApi } from '../api'
 
 interface DeviceMetricsResult {
   deviceId: string
@@ -28,26 +28,6 @@ export function useDeviceMetrics(deviceId: string | undefined): DeviceMetricsRes
     deviceId: data?.device_id || '',
     deviceName: data?.device_name || '',
     metrics: data?.metrics || [],
-    isLoading,
-    error: error as Error | null,
-  }
-}
-
-/**
- * Hook to fetch all available metrics across all devices
- */
-export function useAllMetrics() {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['telemetry', 'metrics'],
-    queryFn: async () => {
-      const response = await telemetryApi.getMetrics()
-      return response.data.metrics
-    },
-    staleTime: 60000,
-  })
-
-  return {
-    metrics: data || [],
     isLoading,
     error: error as Error | null,
   }
