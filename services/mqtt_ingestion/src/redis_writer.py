@@ -28,13 +28,11 @@ class RedisWriter:
     def write_sensor_data(self, device_id: str, sensor_type: str, value: float) -> bool:
         """
         Write sensor data to single Redis stream for all devices.
-        - Stream: mqtt:ingestion (single stream for scalability)
-        - Hash: mqtt_latest:{device_id} (for quick dashboard access)
+        - Stream: mqtt:ingestion (single stream, capped at 100k entries)
         """
         timestamp = datetime.utcnow().isoformat()
 
         stream_key = "mqtt:ingestion"
-        hash_key = f"mqtt_latest:{device_id}"
 
         stream_data = {
             "device_id": device_id,
@@ -44,11 +42,14 @@ class RedisWriter:
         }
 
         try:
-            # Write to single stream
-            self.redis_client.xadd(stream_key, stream_data, maxlen=10000)
+            # Bounded stream; backlog beyond the cap loses oldest first
+            self.redis_client.xadd(stream_key, stream_data, maxlen=100000)
 
-            self.redis_client.hset(hash_key, sensor_type, str(value))
-            self.redis_client.hset(hash_key, f"{sensor_type}_time", timestamp)
+            # Lag signal while the backlog is still recoverable
+            if self.redis_client.xlen(stream_key) > 50000:
+                self.logger.warning(
+                    f"Stream {stream_key} backlog above 50k — consumer lagging"
+                )
 
             return True
         except redis.RedisError as e:
