@@ -292,7 +292,7 @@ def main():
     logger.info(f"Consumer Group: {config.consumer.group_name}")
     logger.info(f"Consumer Name: {config.consumer.consumer_name}")
     logger.info(f"Batch Size: {config.consumer.batch_size}")
-    logger.info(f"Stream Pattern: {config.stream.pattern}")
+    logger.info("Dead-letter stream: mqtt:dlq")
     logger.info("=" * 60)
 
     service = DatabaseWriterService()
