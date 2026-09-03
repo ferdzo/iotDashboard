@@ -24,6 +24,13 @@ class MQTTConfig:
     keepalive: int = 60
     tls: bool = False
     ca_cert: Optional[str] = None
+    client_cert: Optional[str] = None
+    client_key: Optional[str] = None
+
+
+@dataclass
+class DatabaseConfig:
+    url: Optional[str] = None
 
 
 @dataclass
@@ -51,6 +58,11 @@ class Config:
             keepalive=int(os.getenv("MQTT_KEEPALIVE", 60)),
             tls=os.getenv("MQTT_TLS", "False").lower() in ("1", "true", "yes"),
             ca_cert=os.getenv("MQTT_CA_CERT", None),
+            client_cert=os.getenv("MQTT_CLIENT_CERT", None),
+            client_key=os.getenv("MQTT_CLIENT_KEY", None),
+        )
+        self.database = DatabaseConfig(
+            url=os.getenv("DATABASE_URL", None),
         )
 
 
