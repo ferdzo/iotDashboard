@@ -3,6 +3,7 @@
 import requests
 import socket
 import ipaddress
+import logging
 from datetime import timedelta, datetime
 from urllib.parse import urlparse
 from django.utils import timezone
@@ -44,6 +45,8 @@ from .serializers import (
 
 
 device_manager = DeviceManagerClient()
+
+logger = logging.getLogger(__name__)
 
 
 def _reject_unsafe_calendar_url(calendar_url):
@@ -1034,7 +1037,7 @@ class WellnessViewSet(viewsets.ViewSet):
                 outdoor_data['weather'] = weather.get('weather_description')
                 outdoor_data['wind_speed'] = weather.get('wind_speed')
             except Exception as e:
-                self.logger.warning(f"Failed to fetch weather: {e}") if hasattr(self, 'logger') else None
+                logger.warning(f"Failed to fetch weather: {e}")
             
             try:
                 raw_aq = weather_client.get_air_quality(city.lower())

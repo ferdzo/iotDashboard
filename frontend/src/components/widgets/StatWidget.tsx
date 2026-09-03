@@ -6,7 +6,7 @@ interface StatWidgetProps {
   config: WidgetConfig
 }
 
-export default function StatWidgetProps({ config }: StatWidgetProps) {
+export default function StatWidget({ config }: StatWidgetProps) {
   const { deviceIds, metricIds, timeframe, title } = config
 
   const deviceId = deviceIds[0]

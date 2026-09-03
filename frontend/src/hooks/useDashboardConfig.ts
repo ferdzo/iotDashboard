@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { dashboardLayoutApi } from '../api'
 
-export type WidgetType = 'line-chart' | 'gauge' | 'stat' | 'ai-insight' | 'bar-chart' | 'air-quality' | 'weather' | 'comfort-index' | 'run-suitability' | 'health-stats' | 'calendar' | 'daily-briefing'
+export type WidgetType = 'line-chart' | 'gauge' | 'stat' | 'ai-insight' | 'air-quality' | 'weather' | 'comfort-index' | 'run-suitability' | 'health-stats' | 'calendar' | 'daily-briefing'
 
 export interface WidgetConfig {
   id: string
