@@ -384,6 +384,78 @@ class TelemetryViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(time__lte=end_time)
         
         return queryset.order_by('-time')
+
+    def list(self, request, *args, **kwargs):
+        """List telemetry, or bucketed rollups from CAGGs via ?rollup=hour|day."""
+        rollup = request.query_params.get('rollup')
+        if rollup in ('hour', 'day'):
+            return self._rollup_list(request, rollup)
+        if rollup is not None:
+            return Response(
+                {'error': "rollup must be 'hour' or 'day'"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().list(request, *args, **kwargs)
+
+    def _rollup_list(self, request, rollup):
+        """Serve bucketed rows from telemetry_hourly/telemetry_daily."""
+        from django.db import connection
+
+        table = 'telemetry_hourly' if rollup == 'hour' else 'telemetry_daily'
+        where = []
+        params = []
+
+        device_id = request.query_params.get('device_id')
+        if device_id:
+            where.append('c.device_id = %s')
+            params.append(device_id)
+
+        metric = request.query_params.get('metric')
+        if metric:
+            where.append('c.metric = %s')
+            params.append(metric)
+
+        hours = request.query_params.get('hours')
+        if hours:
+            try:
+                hours_int = int(hours)
+            except (ValueError, TypeError):
+                return Response(
+                    {'error': 'hours must be an integer'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            where.append("c.bucket >= now() - make_interval(hours => %s)")
+            params.append(hours_int)
+
+        start_time = request.query_params.get('start_time')
+        if start_time:
+            where.append('c.bucket >= %s')
+            params.append(start_time)
+
+        end_time = request.query_params.get('end_time')
+        if end_time:
+            where.append('c.bucket <= %s')
+            params.append(end_time)
+
+        sql = (
+            'SELECT c.bucket AS time, c.device_id, d.name AS device_name, '
+            'c.metric, c.avg_value AS value, NULL AS unit, '
+            'c.min_value, c.max_value, c.sample_count '
+            f'FROM {table} c LEFT JOIN devices d ON d.id = c.device_id'
+        )
+        if where:
+            sql += ' WHERE ' + ' AND '.join(where)
+        sql += ' ORDER BY time DESC'
+
+        with connection.cursor() as cur:
+            cur.execute(sql, params)
+            cols = [c[0] for c in cur.description]
+            rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+
+        page = self.paginate_queryset(rows)
+        if page is not None:
+            return self.get_paginated_response(page)
+        return Response(rows)
     
     @action(detail=False, methods=['get'])
     def latest(self, request):
