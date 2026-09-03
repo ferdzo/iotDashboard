@@ -59,8 +59,8 @@ services:
       - REDIS_DB=0
       - MQTT_BROKER=mosquitto
       - MQTT_PORT=1883
-      - MQTT_USER=${MQTT_USER:-}
-      - MQTT_PASS=${MQTT_PASS:-}
+      - MQTT_USERNAME=${MQTT_USERNAME:-}
+      - MQTT_PASSWORD=${MQTT_PASSWORD:-}
     depends_on:
       - mosquitto
       - redis
@@ -98,6 +98,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-example}
       - POSTGRES_DB=${POSTGRES_DB:-iot_data}
       - DEVICE_MANAGER_URL=http://device-manager:8000
+      - GPT_SERVICE_URL=http://gpt-service:8001
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
       - DEBUG=False
       - ALLOWED_HOSTS=*
