@@ -113,6 +113,17 @@ Examples (copyable snippets)
   ).first()
   ```
 
+## Ops runbook (bring-up order is load-bearing)
+
+1. `docker compose -f infrastructure/compose.yml config` must pass with zero local edits.
+2. Bootstrap PKI into `infrastructure/mosquitto/certs/` (`ca.crt`, `server.crt`, `server.key`, non-empty `ca.crl`) + ingestion client identity readable by UID 1000. `generate_ca.sh` writes to `./certs` relative to CWD. If the dir is UID-1883-owned, chown from inside a root container.
+3. `up -d redis timescaledb mosquitto`, then `./db_migrations/migrate.sh upgrade` with `CONNECTION_STRING` pointing at `iot_data`.
+4. `create_user.py` for the first login, then `up -d device-manager mqtt-ingestion db-write backend frontend`.
+5. Ports: backend 3000 (compose) / 8000 local runserver is the Django default — the vite proxy targets 3000; BFF JWT at `/api/auth/login|refresh`.
+6. Triage: `XLEN`/`XRANGE`/`XINFO GROUPS`/`XPENDING` on `mqtt:ingestion` (group `db_writer`); poison lives in `mqtt:dlq` with a `reason` field — PEL growth with empty DLQ means the writer is stuck.
+7. After any revoke: refresh `ca.crl`, then `restart mosquitto` (CRL is read at startup only).
+8. Never autogenerate Alembic revisions against a shared database without trimming drops (see `dc7b523353d3`); Alembic owns everything except `dashboard_layouts` (Django).
+
 If you add or change docs
 - Update `README.md` for architecture changes
 - Update `.github/copilot-instructions.md` for development workflow changes  
