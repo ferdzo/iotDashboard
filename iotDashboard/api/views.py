@@ -1,6 +1,8 @@
 """DRF ViewSets for IoT Dashboard API."""
 
 import requests
+import socket
+import ipaddress
 from datetime import timedelta, datetime
 from urllib.parse import urlparse
 from django.utils import timezone
@@ -42,6 +44,45 @@ from .serializers import (
 
 
 device_manager = DeviceManagerClient()
+
+
+def _reject_unsafe_calendar_url(calendar_url):
+    """Return an error string if the URL must not be fetched server-side, else None.
+
+    Blocks non-http(s) schemes and any host resolving to a private, loopback,
+    link-local, multicast, reserved, or unspecified address (SSRF guard).
+    """
+    try:
+        parsed = urlparse(calendar_url)
+    except ValueError:
+        return "Invalid calendar URL"
+    if parsed.scheme not in ("http", "https"):
+        return "Only http/https calendar URLs are supported"
+    host = parsed.hostname
+    if not host:
+        return "Invalid calendar URL"
+    try:
+        infos = socket.getaddrinfo(
+            host, parsed.port or (443 if parsed.scheme == "https" else 80),
+            type=socket.SOCK_STREAM,
+        )
+    except socket.gaierror:
+        return "Calendar host could not be resolved"
+    for info in infos:
+        try:
+            ip = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            return "Calendar host resolved to an invalid address"
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+        ):
+            return "Calendar URL resolves to a private/internal address"
+    return None
 
 
 class DeviceViewSet(viewsets.ModelViewSet):
@@ -632,6 +673,13 @@ class CalendarViewSet(viewsets.ViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        url_error = _reject_unsafe_calendar_url(calendar_url)
+        if url_error:
+            return Response(
+                {'error': url_error},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         try:
             # Keep timeout small to avoid hanging the API worker
             calendar_response = requests.get(calendar_url, timeout=10)
@@ -1023,6 +1071,12 @@ class WellnessViewSet(viewsets.ViewSet):
             # Parse calendar events if URL provided
             calendar_events = None
             if calendar_url:
+                url_error = _reject_unsafe_calendar_url(calendar_url)
+                if url_error:
+                    return Response(
+                        {'error': url_error},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
                 try:
                     cal_response = requests.get(calendar_url, timeout=10)
                     cal_response.raise_for_status()
