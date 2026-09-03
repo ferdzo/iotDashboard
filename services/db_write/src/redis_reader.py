@@ -90,6 +90,31 @@ class RedisReader:
                     )
                     if stream_msg:
                         messages.append(stream_msg)
+                    else:
+                        # Unparsable entries can never succeed downstream:
+                        # dead-letter the raw fields, then ack so the group advances
+                        try:
+                            dlq_fields = {
+                                (k.decode("utf-8", "replace") if isinstance(k, bytes) else str(k)):
+                                (v.decode("utf-8", "replace") if isinstance(v, bytes) else str(v))
+                                for k, v in fields.items()
+                            }
+                            dlq_fields["message_id"] = msg_id
+                            dlq_fields["reason"] = "parse-failed"
+                            self.redis_client.xadd(
+                                "mqtt:dlq", dlq_fields,
+                                maxlen=config.stream.trim_maxlen,
+                            )
+                        except Exception as e:
+                            self.logger.error(f"Failed to dead-letter {msg_id}: {e}")
+                        try:
+                            self.redis_client.xack(
+                                stream_key, config.consumer.group_name, msg_id
+                            )
+                        except Exception as e:
+                            self.logger.error(
+                                f"Failed to acknowledge unparsable {msg_id}: {e}"
+                            )
 
             if messages:
                 self.logger.debug(f"Read {len(messages)} messages")

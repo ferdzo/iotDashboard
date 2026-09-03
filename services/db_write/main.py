@@ -97,6 +97,34 @@ class DatabaseWriterService:
             self.logger.error(f"Service startup failed: {e}", exc_info=True)
             return False
 
+    def _dead_letter(self, messages: List[StreamMessage], reason: str) -> int:
+        """Copy failed messages to the mqtt:dlq stream. Returns count stored.
+
+        Callers must still acknowledge the originals so the consumer group
+        advances; the DLQ preserves the payloads for triage instead of
+        dropping them silently.
+        """
+        stored = 0
+        for msg in messages:
+            try:
+                self.redis_reader.redis_client.xadd(
+                    "mqtt:dlq",
+                    {
+                        "stream_key": msg.stream_key,
+                        "message_id": msg.message_id,
+                        "device_id": msg.device_id,
+                        "metric": msg.sensor_type,
+                        "value": str(msg.value),
+                        "timestamp": msg.timestamp,
+                        "reason": reason,
+                    },
+                    maxlen=config.stream.trim_maxlen,
+                )
+                stored += 1
+            except Exception as e:
+                self.logger.error(f"Failed to dead-letter {msg.message_id}: {e}")
+        return stored
+
     def _processing_loop(self):
         """Main processing loop"""
         consecutive_errors = 0
@@ -120,12 +148,27 @@ class DatabaseWriterService:
 
                 if not readings:
                     self.logger.warning("No valid readings after transformation")
-                    # Acknowledge the messages anyway (they were invalid)
+                    # Invalid messages can never succeed: dead-letter, then ack
+                    self._dead_letter(messages, reason="transform-failed")
                     self.redis_reader.acknowledge_batch(messages)
                     continue
 
-                # Write to database
-                success = self.db_writer.write_batch(readings)
+                # Write to database with retries (fail-closed: never ack
+                # unprocessed work; exhausted batches go to the dead-letter
+                # stream instead of being silently dropped)
+                success = False
+                attempts = 1 + config.stream.max_retries
+                for attempt in range(1, attempts + 1):
+                    if self.db_writer.write_batch(readings):
+                        success = True
+                        break
+                    if attempt < attempts:
+                        backoff = min(2 ** attempt, 30)
+                        self.logger.warning(
+                            f"Write failed (attempt {attempt}/{attempts}), "
+                            f"retrying in {backoff}s"
+                        )
+                        time.sleep(backoff)
 
                 if success:
                     # Successfully written, acknowledge the messages
@@ -139,11 +182,14 @@ class DatabaseWriterService:
                         f"{ack_count} messages acknowledged"
                     )
                 else:
-                    # Write failed, log error and acknowledge to prevent blocking
+                    # Retries exhausted: dead-letter + ack so the queue advances
+                    # without losing the payloads
                     self.logger.error(
-                        f"Failed to write batch of {len(readings)} readings"
+                        f"Failed to write batch of {len(readings)} readings "
+                        f"after {1 + config.stream.max_retries} attempts; "
+                        "moving to dead-letter stream"
                     )
-                    # Acknowledge anyway so they don't block the queue
+                    self._dead_letter(messages, reason="db-write-failed")
                     self.redis_reader.acknowledge_batch(messages)
                     self.stats["messages_failed"] += len(messages)
                     self.stats["errors"] += 1
