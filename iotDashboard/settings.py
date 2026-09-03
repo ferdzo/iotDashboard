@@ -159,13 +159,18 @@ REST_FRAMEWORK = {
         'rest_framework.parsers.JSONParser',
     ],
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'iotDashboard.jwt_authentication.CustomJWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',  # For admin only
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',  # Keep APIs open, auth only in frontend
+        'rest_framework.permissions.IsAuthenticated',
     ],
 }
+
+AUTHENTICATION_BACKENDS = [
+    'iotDashboard.auth_backend.CustomUserBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
 
 # Simple JWT Settings
 from datetime import timedelta
