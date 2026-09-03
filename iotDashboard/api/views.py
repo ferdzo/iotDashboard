@@ -1132,7 +1132,7 @@ class DashboardLayoutViewSet(viewsets.ModelViewSet):
     """ViewSet for managing dashboard layouts (single-user system)."""
     
     serializer_class = DashboardLayoutSerializer
-    permission_classes = [permissions.AllowAny]  # No auth required for single-user system
+    permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
         """Return all layouts (single-user system)."""
