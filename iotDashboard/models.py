@@ -173,7 +173,7 @@ class Telemetry(models.Model):
         unique_together = [["time", "device_id", "metric"]]
 
     def __str__(self):
-        return f"{self.device.name} - {self.metric}: {self.value} at {self.time}"
+        return f"{self.device_id} - {self.metric}: {self.value} at {self.time}"
 
 
 class User(models.Model):

@@ -364,6 +364,10 @@ class TelemetryViewSet(viewsets.ReadOnlyModelViewSet):
             telemetry.append(record)
         
         serializer = self.get_serializer(telemetry, many=True)
+        page = self.paginate_queryset(telemetry)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'])
