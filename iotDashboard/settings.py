@@ -165,6 +165,8 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    'DEFAULT_PAGINATION_CLASS': 'iotDashboard.api.pagination.StandardResultsSetPagination',
+    'PAGE_SIZE': 100,
 }
 
 AUTHENTICATION_BACKENDS = [
