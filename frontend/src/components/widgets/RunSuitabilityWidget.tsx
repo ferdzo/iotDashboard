@@ -153,7 +153,11 @@ export default function RunSuitabilityWidget({ config }: RunSuitabilityWidgetPro
         <div className="text-xs text-base-content/60 flex gap-2 justify-center pt-1 border-t border-base-300 flex-shrink-0 mt-auto">
           <span className="flex items-center gap-1">
             <StepIcon />
-            {data.health_data.steps.toLocaleString()} steps
+            {(data.health_data?.steps ?? null) !== null ? (
+              <>{data.health_data.steps.toLocaleString()} steps</>
+            ) : (
+              <>— steps</>
+            )}
           </span>
         </div>
       </div>
