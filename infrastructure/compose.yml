@@ -54,6 +54,8 @@ services:
       context: ../services/mqtt_ingestion
     env_file:
       - .env.mqi
+    volumes:
+      - ./mosquitto/certs:/app/certs:z
     depends_on:
       - mosquitto
       - redis

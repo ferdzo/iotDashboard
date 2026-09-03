@@ -22,6 +22,8 @@ class MQTTConfig:
     password: Optional[str] = None
     topic_pattern: str = "devices/#"
     keepalive: int = 60
+    tls: bool = False
+    ca_cert: Optional[str] = None
 
 
 @dataclass
@@ -47,6 +49,8 @@ class Config:
             password=os.getenv("MQTT_PASSWORD", None),
             topic_pattern=os.getenv("MQTT_TOPIC_PATTERN", "devices/#"),
             keepalive=int(os.getenv("MQTT_KEEPALIVE", 60)),
+            tls=os.getenv("MQTT_TLS", "False").lower() in ("1", "true", "yes"),
+            ca_cert=os.getenv("MQTT_CA_CERT", None),
         )
 
 
