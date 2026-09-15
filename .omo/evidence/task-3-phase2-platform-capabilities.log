@@ -1,0 +1,97 @@
+=== task-3 evidence log ===
+branch: develop
+base commit: a9ac13a
+registry baseline md5: f39b82d105b7c3c8875037d2b51b4488
+--- BASELINE (unchanged code, mocked psycopg2) ---
+Device registry refresh failed (1x): simulated DB down
+Device registry refresh failed (2x): simulated DB down
+Device registry refresh failed (3x): simulated DB down
+Device registry refresh failed (4x): simulated DB down
+Device registry recovered (2 devices)
+== BASELINE ==
+registry file mtime check: unchanged (git diff empty = True expected below)
+init ok: known=['dev-active', 'dev-inactive-ignored'] failures=0
+is_known(dev-active)=True (expect True)
+is_known(dev-inactive-ignored)=True (expect True -- baseline has NO protocol/is_active distinction beyond WHERE is_active)
+is_known(ghost)=False (expect False)
+has protocol param: False (expect False on baseline)
+has fail_open counter attr: False (expect False on baseline)
+db-down attempt 1: is_known(ghost)=False failures=1
+db-down attempt 2: is_known(ghost)=False failures=2
+db-down attempt 3: is_known(ghost)=True failures=3
+db-down attempt 4: is_known(ghost)=True failures=4
+baseline DB-down: fail-open after 3 failures => attempt3+ True expected (baseline HAS fail-open)
+recovery: is_known(dev-active)=True failures=0 (expect True, failures 0)
+2026-09-15 16:20:55,780 src.registry INFO Device registry loaded (2 active devices)
+INIT loaded=2 rows=[('dev-qa-http', 'http'), ('dev-qa-mqtt', 'mqtt')]
+2026-09-15 16:20:55,781 src.mqtt_client WARNING Dropping message from unknown/inactive device: dev-qa-off (reason=unknown-device dropped_total=1)
+2026-09-15 16:20:55,781 src.mqtt_client WARNING Dropping message from unknown/inactive device: dev-qa-http (reason=unknown-device dropped_total=2)
+2026-09-15 16:20:55,781 src.mqtt_client WARNING Dropping message from unknown/inactive device: dev-qa-ghost (reason=unknown-device dropped_total=3)
+PHASE1 handled=[('dev-qa-mqtt', 'temperature', 23.5)] dropped_total=3
+PHASE1 PASS: active-mqtt flows; inactive/http/ghost dropped with counter
+2026-09-15 16:20:58,721 src.registry INFO Device registry loaded (1 active devices)
+INIT loaded=1 rows=[('dev-qa-http', 'http')]
+2026-09-15 16:20:58,733 src.mqtt_client WARNING Dropping message from unknown/inactive device: dev-qa-mqtt (reason=unknown-device dropped_total=1)
+PHASE2 handled=[] dropped_total=1
+PHASE2 PASS: deactivated device dropped after refresh
+Traceback (most recent call last):
+  File "/tmp/opencode/task3_liveqa.py", line 9, in <module>
+    reg = DeviceRegistry(database_url=DB, ttl_sec=60, max_failures=3)
+  File "/home/ferdzo/projects/iotDashboard/services/mqtt_ingestion/src/registry.py", line 41, in __init__
+    self.refresh(raise_on_error=True)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ferdzo/projects/iotDashboard/services/mqtt_ingestion/src/registry.py", line 46, in refresh
+    conn = psycopg2.connect(self.database_url, connect_timeout=5)
+  File "/home/ferdzo/projects/iotDashboard/.venv/lib/python3.13/site-packages/psycopg2/__init__.py", line 122, in connect
+    conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+psycopg2.OperationalError: connection to server at "127.0.0.1", port 5432 failed: Connection refused
+	Is the server running on that host and accepting TCP/IP connections?
+
+2026-09-15 16:22:14,382 src.registry INFO Device registry loaded (2 active devices)
+INIT loaded=2 rows=[('dev-qa-http', 'http'), ('dev-qa-mqtt', 'mqtt')]
+RECOVERY ghost=False failures=0
+PHASE4 PASS: recovery refreshes cache, ghost dropped again
+
+--- BROKER ROUNDTRIP (in-container, 1883 is container-loopback-only) ---
+mosquitto_pub devices/qa-probe/temperature 21.5 -> mosquitto_sub received: 21.5 (PASS)
+
+--- FAIL-OPEN vs REAL STOPPED POSTGRES (docker stop infrastructure-timescaledb-1) ---
+ATTEMPT1 ghost=False valid=True failures=2 fail_open_total=0 dt=0.00s
+ATTEMPT2 ghost=True valid=True failures=4 fail_open_total=2 dt=0.00s
+ATTEMPT3 ghost=True valid=True failures=6 fail_open_total=4 dt=0.00s
+ATTEMPT4 ghost=True valid=True failures=8 fail_open_total=6 dt=0.00s
+FAILOPEN PASS: warn after 3 failures, messages still flow
+
+--- MOCKED UNIT MATRIX (post-implementation) ---
+WARNING Device registry refresh failed (1x): simulated DB down
+WARNING Device registry refresh failed (2x): simulated DB down
+WARNING Device registry refresh failed (3x): simulated DB down
+WARNING Device registry fail-open, accepting 'ghost' (failures=3 fail_open_total=1)
+WARNING Device registry refresh failed (4x): simulated DB down
+WARNING Device registry fail-open, accepting 'ghost' (failures=4 fail_open_total=2)
+WARNING Device registry refresh failed (5x): simulated DB down
+WARNING Device registry fail-open, accepting 'dev-mqtt' (failures=5 fail_open_total=3)
+WARNING Device registry recovered (2 devices)
+PASS: defaults ttl=60/max_failures=3
+PASS: active mqtt device accepted
+PASS: inactive device dropped
+PASS: http-protocol device dropped on mqtt path
+PASS: http-protocol device accepted on http path
+PASS: null protocol defaults to mqtt
+PASS: unknown device dropped
+PASS: single-arg validator compat
+PASS: startup initial load fails fast
+PASS: pre-failopen ghost rejected (attempt1)
+PASS: pre-failopen ghost rejected (attempt2)
+PASS: fail-open ghost accepted (attempt3)
+PASS: fail-open sticky (attempt4)
+PASS: fail_open_total==2 (one per fail-open decision)
+PASS: failures==4
+PASS: outage: valid device still flows via fail-open
+PASS: recovery accepts new device
+PASS: recovery resets failures
+PASS: recovery drops ghost again
+RESULT: 19 passed, 0 failed (registry unit matrix)
+NOTE: mqtt_client e2e section of that script needs paho; re-ran under project .venv:
+E2E (venv): dropped_total=3 handled=[('dev-mqtt', 'temperature', 23.5)] -> PASS (inactive/http/ghost dropped, valid flows)
+(prod defaults asserted live: ttl=60/max_failures=3; harness used ttl=3-3600 only to force timing)
