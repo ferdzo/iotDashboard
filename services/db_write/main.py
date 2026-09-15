@@ -143,13 +143,21 @@ class DatabaseWriterService:
                 self.stats["messages_read"] += len(messages)
                 self.logger.debug(f"Read {len(messages)} messages from Redis")
 
-                # Transform messages to sensor readings
-                readings = self._transform_messages(messages)
+                # Transform messages to sensor readings, splitting out
+                # per-message validation failures for the dead-letter stream
+                readings, valid_messages, failed_messages = self._transform_messages(
+                    messages
+                )
+
+                if failed_messages:
+                    # Out-of-range / invalid payloads never drop silently:
+                    # reuse the Phase-1 DLQ path with a validation reason.
+                    self._dead_letter(failed_messages, reason="validation-failed")
 
                 if not readings:
                     self.logger.warning("No valid readings after transformation")
-                    # Invalid messages can never succeed: dead-letter, then ack
-                    self._dead_letter(messages, reason="transform-failed")
+                    # Invalid messages can never succeed: dead-lettered above,
+                    # now ack so the consumer group advances
                     self.redis_reader.acknowledge_batch(messages)
                     continue
 
@@ -183,13 +191,14 @@ class DatabaseWriterService:
                     )
                 else:
                     # Retries exhausted: dead-letter + ack so the queue advances
-                    # without losing the payloads
+                    # without losing the payloads (only the transformed subset;
+                    # validation failures were already dead-lettered above)
                     self.logger.error(
                         f"Failed to write batch of {len(readings)} readings "
                         f"after {1 + config.stream.max_retries} attempts; "
                         "moving to dead-letter stream"
                     )
-                    self._dead_letter(messages, reason="db-write-failed")
+                    self._dead_letter(valid_messages, reason="db-write-failed")
                     self.redis_reader.acknowledge_batch(messages)
                     self.stats["messages_failed"] += len(messages)
                     self.stats["errors"] += 1
@@ -221,20 +230,28 @@ class DatabaseWriterService:
 
     def _transform_messages(
         self, messages: List[StreamMessage]
-    ) -> List[TelemetryReading]:
-        """Transform stream messages to sensor readings"""
+    ) -> tuple:
+        """Transform stream messages to sensor readings.
+
+        Returns (readings, valid_messages, failed_messages) so callers can
+        dead-letter per-message validation failures instead of dropping them.
+        """
         readings = []
+        valid_messages = []
+        failed_messages = []
 
         for msg in messages:
             reading = self.schema_handler.transform_message(msg)
             if reading:
                 readings.append(reading)
+                valid_messages.append(msg)
             else:
+                failed_messages.append(msg)
                 self.logger.warning(
                     f"Failed to transform message {msg.message_id} from {msg.stream_key}"
                 )
 
-        return readings
+        return readings, valid_messages, failed_messages
 
     def stop(self):
         """Stop the service gracefully"""

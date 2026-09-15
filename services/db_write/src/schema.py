@@ -7,6 +7,53 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, Dict, Any
 import json
+import math
+
+# Canonical per-metric plausibility ranges and units, derived from
+# services/gpt_service/METRICS_REFERENCE.md (optimal/critical bands widened to
+# physical sensor plausibility so only faulty readings are rejected).
+# Unknown metrics fall through to the generic warn-only guard in
+# validate_reading so valid readings are never altered.
+METRIC_SPECS: Dict[str, Dict[str, Any]] = {
+    "temperature": {"min": -50.0, "max": 60.0, "unit": "\u00b0C"},
+    "humidity": {"min": 0.0, "max": 100.0, "unit": "%"},
+    "co2": {"min": 300.0, "max": 5000.0, "unit": "ppm"},
+    "pressure": {"min": 800.0, "max": 1100.0, "unit": "hPa"},
+    "light": {"min": 0.0, "max": 100000.0, "unit": "lux"},
+    "noise": {"min": 0.0, "max": 140.0, "unit": "dB"},
+    "pm25": {"min": 0.0, "max": 1000.0, "unit": "\u00b5g/m\u00b3"},
+    "voc": {"min": 0.0, "max": 5000.0, "unit": "ppb"},
+}
+
+# Incoming topic/metric aliases that map onto the canonical specs above.
+# The stored reading.metric is never renamed; aliases are lookup-only.
+METRIC_ALIASES: Dict[str, str] = {
+    "temperature": "temperature",
+    "temp": "temperature",
+    "humidity": "humidity",
+    "hum": "humidity",
+    "co2": "co2",
+    "co₂": "co2",
+    "pressure": "pressure",
+    "atmospheric_pressure": "pressure",
+    "atm_pressure": "pressure",
+    "light": "light",
+    "illuminance": "light",
+    "lux": "light",
+    "noise": "noise",
+    "sound": "noise",
+    "pm25": "pm25",
+    "pm2.5": "pm25",
+    "pm_25": "pm25",
+    "voc": "voc",
+}
+
+
+def canonical_metric(metric: str) -> Optional[str]:
+    """Return the canonical spec key for a metric name, or None if unknown."""
+    if not metric:
+        return None
+    return METRIC_ALIASES.get(metric.strip().lower())
 
 
 @dataclass
@@ -88,6 +135,14 @@ class SchemaHandler:
                 else None,
             )
 
+            # Default the unit from the canonical per-metric spec when the
+            # publisher did not supply one; an explicit metadata unit is
+            # always propagated untouched.
+            if reading.unit is None:
+                spec_key = canonical_metric(reading.metric)
+                if spec_key is not None:
+                    reading.unit = METRIC_SPECS[spec_key]["unit"]
+
             # Validate the reading
             validation = self.validate_reading(reading)
             if not validation.valid:
@@ -118,6 +173,23 @@ class SchemaHandler:
 
             if not isinstance(reading.value, (int, float)):
                 return ValidationResult(False, "value must be numeric")
+
+            if isinstance(reading.value, float) and (
+                math.isnan(reading.value) or math.isinf(reading.value)
+            ):
+                return ValidationResult(False, "value must be finite (no nan/inf)")
+
+            spec_key = canonical_metric(reading.metric)
+            if spec_key is not None:
+                spec = METRIC_SPECS[spec_key]
+                if reading.value < spec["min"] or reading.value > spec["max"]:
+                    return ValidationResult(
+                        False,
+                        f"{reading.metric} value {reading.value} out of range "
+                        f"[{spec['min']}, {spec['max']}] {spec['unit']} "
+                        f"(validation-failed)",
+                    )
+                return ValidationResult(True)
 
             if reading.value < -1000000 or reading.value > 1000000:
                 self.logger.warning(f"Value {reading.value} is outside typical range")
