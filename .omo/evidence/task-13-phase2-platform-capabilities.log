@@ -1,0 +1,40 @@
+# task-13 phase2-platform-capabilities — useDashboardConfig split — evidence log
+# branch: develop | worker: implementer (todo 13 only)
+
+## 0. Pre-flight (adversarial probes)
+- dirty_worktree: PROBE — `git status --short -- frontend/ iotDashboard/` shows:
+    M frontend/src/App.tsx
+    ?? frontend/src/components/AppLayout.tsx
+  These are sibling (task-11 shell) files. MUST NOT touch, stage, or commit them.
+- zod dependency check: PROBE — frontend/package.json has NO zod dependency.
+  Decision: implement schema validation dependency-free (no new deps). Noted as risk/decision, not a dep addition.
+- Baseline monolith: frontend/src/hooks/useDashboardConfig.ts (245 lines, single file):
+  - types: WidgetType (11-member union), WidgetConfig, DashboardConfig {widgets, layout, refreshInterval?}
+  - load: backend GET /dashboard-layouts/default/ first; on failure fall back to localStorage key 'iot-dashboard-config'; if localStorage had data, POST /dashboard-layouts/ {name:'default', config, is_default:true}
+  - saveConfig(): localStorage.setItem immediate + PUT /dashboard-layouts/{id}/ or POST create; returns boolean
+  - autosave: useEffect on [config, layoutId], skipped on initial load; localStorage immediate + setTimeout 2000ms backend save; cleanup clears timeout
+  - CRUD: addWidget append, updateWidget map-merge, removeWidget filter, reorderWidgets replace, resetConfig DEFAULT {widgets:[],layout:'grid',refreshInterval:30000}, exportConfig JSON.stringify(config,null,2), importConfig JSON.parse + setConfig (throws 'Invalid configuration')
+  - Return shape: {config, addWidget, updateWidget, removeWidget, reorderWidgets, resetConfig, exportConfig, importConfig, saveConfig, isLoading}
+- Consumer (read-only): frontend/src/pages/Dashboard.tsx uses {config, addWidget, removeWidget, updateWidget, exportConfig, importConfig, saveConfig} — import/export/saveConfig signatures must stay compatible.
+- Server contract (read-only): iotDashboard/api/views.py DashboardLayoutViewSet — GET /dashboard-layouts/default/, POST /dashboard-layouts/, PUT /dashboard-layouts/{id}/, POST set_default. No server change.
+
+## 1. Implementation (files)
+- NEW frontend/src/hooks/dashboardConfigSchema.ts — WidgetType/WidgetConfig/DashboardConfig (names stable, shapes byte-identical), DEFAULT_CONFIG, STORAGE_KEY, AUTOSAVE_DEBOUNCE_MS=2000, dependency-free validators isWidgetType/isWidgetConfig/isDashboardConfig + safeParseDashboardConfig + parseDashboardConfigOrThrow('Invalid configuration'). No zod: NOT a dependency in frontend/package.json; no deps added.
+- NEW frontend/src/hooks/dashboardConfigStorage.ts — loadFromLocalStorage/saveToLocalStorage/loadDashboardConfig (backend-default-first → localStorage+seed → null) + createRemoteLayout/updateRemoteLayout over dashboardLayoutApi. Same endpoints, same payloads.
+- NEW frontend/src/hooks/useDashboardConfigSync.ts — useDashboardConfigSync({config,layoutId,setLayoutId,isInitialLoadRef,debounceMs=2000}): localStorage immediate + setTimeout backend save with cleanup. Effect deps [config, layoutId, ...].
+- NEW frontend/src/hooks/dashboardConfigOps.ts — pure addWidgetOp/updateWidgetOp/removeWidgetOp/reorderWidgetsOp/resetConfigOp/exportConfigOp(JSON.stringify null,2)/importConfigOp(validated, throws).
+- REWRITE frontend/src/hooks/useDashboardConfig.ts — thin orchestrator, same return shape {config,addWidget,updateWidget,removeWidget,reorderWidgets,resetConfig,exportConfig,importConfig,saveConfig,isLoading}; types re-exported so `from '../hooks'` still resolves WidgetType/WidgetConfig/DashboardConfig.
+- NOT touched: Dashboard.tsx (consumer), iotDashboard/api/views.py (contract), App.tsx/AppLayout.tsx (sibling task-11 dirty files).
+
+## 2. Verification (real exit codes, not pipeline-masked)
+- npx tsc -b → REAL-tsc-exit:0 (after fixing verbatimModuleSyntax type-only imports; first run surfaced TS1484 x6 — fixed, not hidden)
+- esbuild bundle of schema+ops + node asserts → REAL-node-exit:0, ALL-TASK13-ASSERTS-GREEN:
+  PASS load-unchanged:legacy (5-widget doc w/ line-chart+gauge+calendar+briefing+weather, positions, optionals — byte-identical)
+  PASS load-unchanged:legacyNoRefresh (older save without refreshInterval — byte-identical)
+  PASS round-trip:byte-identical (export → import → stringify)
+  PASS invalid:throws-Invalid-configuration (4 malformed payloads: bad JSON, wrong types, empty id/bogus type, bad layout)
+  PASS crud:add/update/remove/reorder/reset
+- AUTOSAVE_DEBOUNCE_MS=2000 confirmed (dashboardConfigSchema.ts:89); sync engine setTimeout in useDashboardConfigSync.ts:37
+- npm run build (tsc -b && vite build) → REAL-build-exit:0, 916 modules, dist JS 1022.15 kB / gzip 305.39 kB (chunk-size warning only, pre-existing)
+- npx eslint on 5 hook files → REAL-eslint-exit:0
+- Manual-QA artifact: /tmp/opencode/task13-assert.mjs + bundle /tmp/opencode/task13-bundle.mjs (binary observables: exit 0 + ALL-TASK13-ASSERTS-GREEN + dist assets above). Autosave timing is code-constant (2000ms) + effect-cleanup verified by read; live backend round-trip not run (no backend in scope; failure path preserved: server save fails → local state intact, error logged, saveConfig returns false).
