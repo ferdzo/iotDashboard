@@ -1,4 +1,5 @@
 import logging
+import math
 import ssl
 import paho.mqtt.client as mqtt
 from typing import Callable
@@ -45,24 +46,62 @@ class MQTTClient:
         try:
             topic_parts = msg.topic.split("/")
             if len(topic_parts) != 3 or topic_parts[0] != "devices":
-                logger.warning(f"Invalid topic format: {msg.topic}")
+                self.dropped_total += 1
+                logger.warning(
+                    f"Dropping message with invalid topic shape: {msg.topic} "
+                    f"(reason=invalid-topic-shape "
+                    f"dropped_total={self.dropped_total})"
+                )
                 return
 
             device_id = topic_parts[1]
             sensor_type = topic_parts[2]
 
+            if not device_id or not device_id.strip():
+                self.dropped_total += 1
+                logger.warning(
+                    f"Dropping message with empty device_id: {msg.topic} "
+                    f"(reason=empty-device-id "
+                    f"dropped_total={self.dropped_total})"
+                )
+                return
+
+            if not sensor_type or not sensor_type.strip():
+                self.dropped_total += 1
+                logger.warning(
+                    f"Dropping message with empty metric: {msg.topic} "
+                    f"(reason=empty-metric "
+                    f"dropped_total={self.dropped_total})"
+                )
+                return
+
             if self.device_validator is not None and not self.device_validator(device_id):
                 self.dropped_total += 1
                 logger.warning(
                     f"Dropping message from unknown/inactive device: {device_id} "
-                    f"(dropped_total={self.dropped_total})"
+                    f"(reason=unknown-device "
+                    f"dropped_total={self.dropped_total})"
                 )
                 return
 
             try:
                 value = float(msg.payload.decode())
-            except ValueError:
-                logger.error(f"Invalid payload for {msg.topic}: {msg.payload}")
+            except (ValueError, UnicodeDecodeError):
+                self.dropped_total += 1
+                logger.warning(
+                    f"Dropping message with invalid payload for {msg.topic}: "
+                    f"{msg.payload!r} (reason=invalid-payload "
+                    f"dropped_total={self.dropped_total})"
+                )
+                return
+
+            if not math.isfinite(value):
+                self.dropped_total += 1
+                logger.warning(
+                    f"Dropping message with non-finite value for {msg.topic}: "
+                    f"{value!r} (reason=non-finite-value "
+                    f"dropped_total={self.dropped_total})"
+                )
                 return
 
             self.message_handler(device_id, sensor_type, value)
