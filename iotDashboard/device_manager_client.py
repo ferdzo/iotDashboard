@@ -32,6 +32,15 @@ class DeviceInfo:
     created_at: datetime
 
 
+@dataclass
+class CommandSendResponse:
+    req_id: str
+    device_id: str
+    action: str
+    state: str
+    ttl_sec: int
+
+
 class DeviceManagerAPIError(Exception):
     def __init__(self, status_code: int, message: str, details: Optional[Dict] = None):
         self.status_code = status_code
@@ -156,6 +165,31 @@ class DeviceManagerClient:
         response = self._request("POST", f"/devices/{device_id}/delete")
         return response.json()
 
+    def send_command(
+        self,
+        device_id: str,
+        action: str,
+        payload: Optional[Dict[str, Any]] = None,
+        ttl_sec: int = 300,
+    ) -> CommandSendResponse:
+        """Send a command to a device via the BFF publish path.
+
+        Returns the tracking record (req_id) for the requested command.
+        """
+        response = self._request(
+            "POST",
+            f"/devices/{device_id}/commands",
+            json={"action": action, "payload": payload or {}, "ttl_sec": ttl_sec},
+        )
+        data = response.json()
+        return CommandSendResponse(
+            req_id=data["req_id"],
+            device_id=data["device_id"],
+            action=data["action"],
+            state=data["state"],
+            ttl_sec=data["ttl_sec"],
+        )
+
     def get_ca_certificate(self) -> str:
         response = self._request("GET", "/ca_certificate")
         return response.text
@@ -222,3 +256,12 @@ def renew_certificate(device_id: str) -> Dict[str, Any]:
 
 def delete_device(device_id: str) -> Dict[str, Any]:
     return default_client.delete_device(device_id)
+
+
+def send_command(
+    device_id: str,
+    action: str,
+    payload: Optional[Dict[str, Any]] = None,
+    ttl_sec: int = 300,
+) -> CommandSendResponse:
+    return default_client.send_command(device_id, action, payload, ttl_sec)

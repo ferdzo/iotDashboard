@@ -4,7 +4,7 @@ SQLAlchemy ORM models for device manager service.
 These models mirror the database schema defined in db_migrations.
 Kept separate to make the service independent.
 """
-from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Index, Text
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Index, Integer, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 
@@ -97,3 +97,33 @@ class DeviceOnboardingToken(Base):
 
     def __repr__(self):
         return f"<DeviceOnboardingToken(device_id={self.device_id}, used={self.used_at is not None})>"
+
+
+class CommandLog(Base):
+    """Device command audit trail (requested → acked/expired/failed).
+
+    Mirrors db_migrations CommandLog (revision e5f2a9c41d7b); writes here
+    are issued by the POST /devices/{id}/commands endpoint (todo 7).
+    """
+
+    __tablename__ = "command_log"
+
+    id = Column(Text, primary_key=True)
+    device_id = Column(
+        Text, ForeignKey("devices.id", ondelete="CASCADE"), nullable=False
+    )
+    action = Column(Text, nullable=False)
+    payload = Column(JSON)
+    req_id = Column(Text, unique=True, nullable=False)
+    state = Column(Text, nullable=False, default="requested")
+    ttl_sec = Column(Integer, nullable=False, default=300)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    acked_at = Column(DateTime(timezone=True))
+
+    __table_args__ = (
+        Index("idx_command_log_device_id", "device_id"),
+        Index("idx_command_log_state", "state"),
+    )
+
+    def __repr__(self):
+        return f"<CommandLog(req_id={self.req_id}, device={self.device_id}, state={self.state})>"
