@@ -11,7 +11,14 @@ import AddDevice from './pages/AddDevice'
 import Login from './pages/Login'
 import './App.css'
 
-const queryClient = new QueryClient()
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 10_000,
+      retry: 2,
+    },
+  },
+})
 
 function ProtectedRoute() {
   const { isAuthenticated } = useAuth()
