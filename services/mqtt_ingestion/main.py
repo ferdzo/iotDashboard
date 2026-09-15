@@ -8,6 +8,7 @@ from src.mqtt_client import MQTTClient
 from src.redis_writer import RedisWriter
 from src.config import config
 from src.registry import DeviceRegistry
+from src.expiry_sweep import create_expiry_sweep
 
 logging.basicConfig(
     level=getattr(logging, "INFO"),
@@ -22,6 +23,7 @@ class MQTTIngestionService:
         self.redis_writer = None
         self.mqtt_client = None
         self.registry = None
+        self.expiry_sweep = None
         self.http_server = None
         self.http_thread = None
 
@@ -43,6 +45,20 @@ class MQTTIngestionService:
             logger.info(f"Processed {device_id}/{sensor_type}: {value}")
         else:
             logger.error(f"Failed to process {device_id}/{sensor_type}: {value}")
+
+    def start_expiry_sweep(self):
+        """Start the command expiry sweep (60s loop, same process).
+
+        Shares the process with the future ack listener (todo 8 owns
+        that module — it is intentionally NOT created here). A start
+        failure is logged and does NOT stop the MQTT/telemetry loop.
+        """
+        try:
+            self.expiry_sweep = create_expiry_sweep(config.database.url or "")
+            self.expiry_sweep.start()
+        except Exception as e:
+            logger.error(f"Command expiry sweep failed to start: {e}")
+            self.expiry_sweep = None
 
     def start_http_server(self):
         """Start the HTTP ingress sibling (same process, no new service).
@@ -124,6 +140,8 @@ class MQTTIngestionService:
                 logger.error("Failed to connect to MQTT, exiting")
                 return False
 
+            self.start_expiry_sweep()
+
             self.start_http_server()
 
             self.running = True
@@ -147,6 +165,9 @@ class MQTTIngestionService:
 
         if self.http_server:
             self.http_server.should_exit = True
+
+        if self.expiry_sweep:
+            self.expiry_sweep.stop()
 
         if self.mqtt_client:
             self.mqtt_client.stop()
