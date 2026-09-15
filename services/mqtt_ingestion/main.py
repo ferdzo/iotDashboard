@@ -8,6 +8,7 @@ from src.mqtt_client import MQTTClient
 from src.redis_writer import RedisWriter
 from src.config import config
 from src.registry import DeviceRegistry
+from src.ack_listener import create_ack_listener
 from src.expiry_sweep import create_expiry_sweep
 
 logging.basicConfig(
@@ -23,6 +24,7 @@ class MQTTIngestionService:
         self.redis_writer = None
         self.mqtt_client = None
         self.registry = None
+        self.ack_listener = None
         self.expiry_sweep = None
         self.http_server = None
         self.http_thread = None
@@ -46,11 +48,26 @@ class MQTTIngestionService:
         else:
             logger.error(f"Failed to process {device_id}/{sensor_type}: {value}")
 
+    def start_ack_listener(self):
+        """Start the device ack subscriber (same process as the sweep).
+
+        Shares the broker connection config and DB URL with the expiry
+        sweep (todo 9 seam: ``create_expiry_sweep``); owns its own
+        ``devices/+/status`` subscription so telemetry is untouched. A
+        start failure is logged and does NOT stop the MQTT/telemetry loop.
+        """
+        try:
+            self.ack_listener = create_ack_listener(config.database.url or "")
+            self.ack_listener.start()
+        except Exception as e:
+            logger.error(f"Device ack listener failed to start: {e}")
+            self.ack_listener = None
+
     def start_expiry_sweep(self):
         """Start the command expiry sweep (60s loop, same process).
 
-        Shares the process with the future ack listener (todo 8 owns
-        that module — it is intentionally NOT created here). A start
+        Shares the process with the ack listener (todo 8 module,
+        started alongside via ``start_ack_listener``). A start
         failure is logged and does NOT stop the MQTT/telemetry loop.
         """
         try:
@@ -140,6 +157,8 @@ class MQTTIngestionService:
                 logger.error("Failed to connect to MQTT, exiting")
                 return False
 
+            self.start_ack_listener()
+
             self.start_expiry_sweep()
 
             self.start_http_server()
@@ -168,6 +187,9 @@ class MQTTIngestionService:
 
         if self.expiry_sweep:
             self.expiry_sweep.stop()
+
+        if self.ack_listener:
+            self.ack_listener.stop()
 
         if self.mqtt_client:
             self.mqtt_client.stop()
