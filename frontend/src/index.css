@@ -1,9 +1,6 @@
 @import "tailwindcss";
-@plugin "daisyui";
-
-/* DaisyUI theme configuration */
-@theme {
-  --dui-themes: light, dark, cupcake, corporate;
+@plugin "daisyui" {
+  themes: light --default, dark --prefersdark, cupcake, corporate;
 }
 
 /* Ensure full viewport height */

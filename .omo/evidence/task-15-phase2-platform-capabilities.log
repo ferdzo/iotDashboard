@@ -1,0 +1,69 @@
+=== TASK 15 BASELINE 2026-09-15T22:00:00Z ===
+Branch: develop | HEAD: 8676328 feat(frontend): device command controls
+
+--- git status (tracked, baseline) ---
+ M frontend/src/App.tsx                     <- SIBLING TODO-11 DIRTY WORK, DO NOT TOUCH
+?? frontend/src/components/AppLayout.tsx     <- SIBLING TODO-11 UNTRACKED WORK, DO NOT TOUCH
+
+--- theme config baseline (frontend/src/index.css:1-7) ---
+@import "tailwindcss"; @plugin "daisyui"; @theme { --dui-themes: light, dark, cupcake, corporate; }
+NOTE: `@theme --dui-themes` is NOT a real daisyui-v5 knob (v5 default = all themes, light default).
+No data-theme attribute set anywhere; no theme toggle; no localStorage theme key (grep: 0 hits).
+First-visit effective theme: light (daisyui v5 default, no data-theme attr).
+
+--- icon inventory baseline (grep -c '<svg' per file) ---
+20 files contain inline SVG; 74 total `<svg` occurrences.
+Largest: AddWidgetModal 13, AiInsightWidget 8, Dashboard 8, DailyBriefingWidget 7,
+DeviceList 6, AppLayout.tsx (sibling) 6, HealthStatsWidget 5, CredentialsViewer 4,
+WidgetContainer 3, ComfortIndexWidget 2, LineChartWidget 2, RunSuitabilityWidget 2, ...
+WeatherWidget.tsx: local SVG library (IconBase + 12 icons), READ-ONLY seed per task scope.
+App.tsx: 0 (shell moved to sibling AppLayout.tsx).
+SCOPE DECISION: create single Icon component seeded from WeatherWidget + shell set;
+migrate ZERO existing call sites (WeatherWidget read-only; AppLayout/App.tsx sibling-owned;
+all other files out of scope) => zero per-file regression risk by construction.
+
+--- CSS layout baseline (sha256) ---
+4a5300e4... index.css (134 lines: tailwind+plugin+@theme, viewport, scrollbar, btn/card, fadeInUp, radix dialog)
+29dd0a55... App.css (165 lines: #root, drawer scrollbar, btn/card, badge, fadeInUp, overflow-x-auto, loading/spin, react-grid-layout)
+ae2db1b9... widget-styles.css (58 lines: .widget-card, gridstack alignment)
+Importers: main.tsx->index.css; App.tsx->App.css; 6 widgets->widget-styles.css
+(AirQuality, ComfortIndex, HealthStats, DailyBriefing, Calendar, RunSuitability)
+Duplication note: .btn/.card transitions + fadeInUp/.stats defined in BOTH index.css and App.css (pre-existing).
+
+--- baseline build ---
+npm run build -> exit 0, dist CSS 97.01 kB (index-DaW3HzoZ.css), JS 1022.15 kB.
+
+=== TASK 15 IMPLEMENTATION 2026-09-15T23:00Z ===
+New files:
+- frontend/src/styles/globals.css (verbatim content of former App.css; canonical app-shell source)
+- frontend/src/styles/widget-card.css (verbatim content of former widget-styles.css; canonical widget source)
+- frontend/src/components/icon-paths.tsx (21 icon paths seeded verbatim; no components per react-refresh rule)
+- frontend/src/components/Icon.tsx (single <Icon name/> component; unknown name -> "?" fallback span, never throws)
+- frontend/src/hooks/useTheme.ts (THEMES light/dark/cupcake/corporate, THEME_STORAGE_KEY iot-dashboard-theme, get/apply/useTheme)
+- frontend/src/components/ThemeToggle.tsx (daisyUI select; fixed bottom-right so it mounts without touching sibling todo-11 shell)
+Modified:
+- frontend/src/index.css: `@plugin "daisyui"` narrowed to `themes: light --default, dark --prefersdark, cupcake, corporate` (replaces inert `@theme --dui-themes` block). No design tokens touched.
+- frontend/src/App.css: now 1-line shim importing ./styles/globals.css (keeps sibling todo-11's dirty `import './App.css'` working).
+- frontend/src/components/widgets/widget-styles.css: now 1-line shim importing ../../styles/widget-card.css (keeps 6 widget imports working).
+- frontend/src/main.tsx: applyStoredTheme() at startup + <ThemeToggle/> mount (additive only).
+- frontend/index.html: data-theme="light" default + pre-paint script applying stored theme (key+names mirror useTheme.ts).
+NOT touched (out of scope / sibling-owned / read-only): App.tsx (sibling dirty), components/AppLayout.tsx (sibling untracked),
+WeatherWidget.tsx (read-only seed), WidgetContainer.tsx, all other SVG call sites (zero-migration => zero regression risk).
+No new icon library dependency (inline consolidated component).
+
+=== TASK 15 VERIFICATION ===
+1. npm run build (tsc -b && vite build): BUILD_EXIT=0, dist/assets/index-BesQRYL3.css 104270 B, index-CXX9bFyo.js 1023260 B.
+   Size delta vs baseline (97.01 kB): +7 kB = cupcake+corporate theme blocks now bundled (baseline default bundled light+dark only); light double-emit is pre-existing daisyUI behavior (confirmed 2x in stashed baseline build too). Rule-level dedupe proven: drawer-scrollbar rule 1x, widget-card padding rule 1x in dist.
+2. npx eslint on 5 TS files (main, useTheme, Icon, icon-paths, ThemeToggle): LINT_EXIT=0 (after icon-paths split for react-refresh rule).
+3. Headless theme-logic test on COMPILED REAL useTheme.ts (tsc -> /tmp, stubbed localStorage/document): 13/13 ok, THEME_TEST_PASS.
+   flip cupcake -> data-theme=cupcake + persisted; reload re-applies; invalid stored/apply -> light; denied storage -> no throw, still applies.
+4. Headless Icon runtime test on COMPILED REAL Icon (stubbed jsx-runtime): 21/21 known names render tagged <svg>; unknown renders "?" fallback span; ICON_TEST_PASS.
+5. Seed parity (strict `d=`/`points=` match): every path in WeatherWidget/AppLayout/WidgetContainer present in icon-paths.tsx: PARITY_PASS.
+
+=== TASK 15 MANUAL-QA (binary observables, dist of BUILD_EXIT=0) ===
+- dist CSS: data-theme=light x1, dark x1, cupcake x1, corporate x1 (4/4 bundled); cyberpunk/black/dim/retro/valentine/abyss x0 (trim effective).
+- dist JS: storage key "iot-dashboard-theme" present; data-theme setAttribute path present; ThemeToggle select markup present.
+- index.html <-> useTheme.ts sync: key 1x each; theme lists identical.
+- git status (tracked): M frontend/index.html, M frontend/src/App.css, M frontend/src/components/widgets/widget-styles.css, M frontend/src/index.css, M frontend/src/main.tsx + new Icon/icon-paths/ThemeToggle/useTheme/styles; sibling App.tsx modification + AppLayout.tsx untracked left untouched.
+- Cleanup receipt: rm -rf /tmp/opencode/t15 done; repo has no new temp files (verify via git status at commit).
+Risks/notes: (a) ThemeToggle is fixed-position until todo-11 owner moves it into AppLayout navbar (1-line move, behavior unchanged). (b) App.css/widget-styles.css shims are dead-code-purge candidates for todo 16. (c) No call-site icon migration yet (deferred to avoid sibling conflicts); Icon covers 21 names + fallback.
