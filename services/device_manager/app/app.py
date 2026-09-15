@@ -18,6 +18,7 @@ from app.db_models import (
 from app.models import (
     CommandRequest,
     CommandResponse,
+    CommandStatus,
     DeviceCertificateResponse,
     DeviceRegistrationRequest,
     DeviceRegistrationResponse,
@@ -312,6 +313,51 @@ async def send_device_command(
     except Exception as e:
         logger.error(f"Failed to send command to device {device_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to send command.") from e
+
+
+@app.get("/devices/{device_id}/commands/{req_id}")
+async def get_device_command_status(
+    device_id: str, req_id: str
+) -> CommandStatus:
+    """Read-only command tracking lookup (todo 10 status polling).
+
+    Returns the command_log row for ``req_id`` scoped to ``device_id``.
+    Unknown device or req_id → 404. Never publishes, never mutates.
+    """
+    try:
+        with get_db_context() as db:
+            row = (
+                db.query(CommandLog)
+                .filter(
+                    CommandLog.device_id == device_id,
+                    CommandLog.req_id == req_id,
+                )
+                .first()
+            )
+            if row is None:
+                device = db.query(Device).filter(Device.id == device_id).first()
+                if device is None:
+                    raise HTTPException(status_code=404, detail="Device not found")
+                raise HTTPException(status_code=404, detail="Command not found")
+            return CommandStatus(
+                req_id=row.req_id,
+                device_id=row.device_id,
+                action=row.action,
+                state=row.state,
+                ttl_sec=row.ttl_sec,
+                created_at=row.created_at,
+                acked_at=row.acked_at,
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            f"Failed to fetch command {req_id} for device {device_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500, detail="Failed to fetch command status."
+        ) from e
 
 
 @app.get("/devices/{device_id}")

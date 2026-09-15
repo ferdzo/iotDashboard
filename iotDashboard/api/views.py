@@ -207,6 +207,75 @@ class DeviceViewSet(viewsets.ModelViewSet):
                 status=e.status_code or status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
+    @action(detail=True, methods=['post'], url_path='commands')
+    def send_command(self, request, pk=None):
+        """Send a command to a device via device_manager publish path."""
+        device = self.get_object()
+
+        action = (request.data.get('action') or '').strip()
+        if not action:
+            return Response(
+                {'error': 'action is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        payload = request.data.get('payload', {})
+        if payload is None:
+            payload = {}
+        if not isinstance(payload, dict):
+            return Response(
+                {'error': 'payload must be a JSON object'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            ttl_sec = int(request.data.get('ttl_sec', 300))
+        except (TypeError, ValueError):
+            return Response(
+                {'error': 'ttl_sec must be an integer'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            result = device_manager.send_command(
+                device.id, action, payload, ttl_sec
+            )
+            return Response({
+                'req_id': result.req_id,
+                'device_id': result.device_id,
+                'action': result.action,
+                'state': result.state,
+                'ttl_sec': result.ttl_sec,
+            }, status=status.HTTP_202_ACCEPTED)
+        except DeviceManagerAPIError as e:
+            return Response(
+                {'error': e.message, 'details': e.details},
+                status=e.status_code or status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['get'],
+            url_path=r'commands/(?P<req_id>[^/.]+)')
+    def command_status(self, request, pk=None, req_id=None):
+        """Poll command_log state for a previously sent command (read-only)."""
+        device = self.get_object()
+
+        try:
+            result = device_manager.get_command_status(device.id, req_id)
+            return Response({
+                'req_id': result.req_id,
+                'device_id': result.device_id,
+                'action': result.action,
+                'state': result.state,
+                'ttl_sec': result.ttl_sec,
+                'created_at': result.created_at.isoformat()
+                if result.created_at else None,
+                'acked_at': result.acked_at.isoformat()
+                if result.acked_at else None,
+            })
+        except DeviceManagerAPIError as e:
+            return Response(
+                {'error': e.message, 'details': e.details},
+                status=e.status_code or status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
     @action(detail=True, methods=['get'])
     def credentials(self, request, pk=None):
         """

@@ -41,6 +41,17 @@ class CommandSendResponse:
     ttl_sec: int
 
 
+@dataclass
+class CommandStatusResponse:
+    req_id: str
+    device_id: str
+    action: str
+    state: str
+    ttl_sec: int
+    created_at: Optional[datetime] = None
+    acked_at: Optional[datetime] = None
+
+
 class DeviceManagerAPIError(Exception):
     def __init__(self, status_code: int, message: str, details: Optional[Dict] = None):
         self.status_code = status_code
@@ -190,6 +201,33 @@ class DeviceManagerClient:
             ttl_sec=data["ttl_sec"],
         )
 
+    def get_command_status(
+        self, device_id: str, req_id: str
+    ) -> CommandStatusResponse:
+        """Fetch the tracking record for a previously sent command.
+
+        Read-only: never publishes, never mutates command_log.
+        """
+        response = self._request(
+            "GET", f"/devices/{device_id}/commands/{req_id}"
+        )
+        data = response.json()
+
+        def _parse_dt(value):
+            if not value:
+                return None
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+        return CommandStatusResponse(
+            req_id=data["req_id"],
+            device_id=data["device_id"],
+            action=data["action"],
+            state=data["state"],
+            ttl_sec=data["ttl_sec"],
+            created_at=_parse_dt(data.get("created_at")),
+            acked_at=_parse_dt(data.get("acked_at")),
+        )
+
     def get_ca_certificate(self) -> str:
         response = self._request("GET", "/ca_certificate")
         return response.text
@@ -265,3 +303,7 @@ def send_command(
     ttl_sec: int = 300,
 ) -> CommandSendResponse:
     return default_client.send_command(device_id, action, payload, ttl_sec)
+
+
+def get_command_status(device_id: str, req_id: str) -> CommandStatusResponse:
+    return default_client.get_command_status(device_id, req_id)
