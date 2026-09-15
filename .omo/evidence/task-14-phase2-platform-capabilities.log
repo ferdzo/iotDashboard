@@ -1,0 +1,138 @@
+TASK 14 phase2-platform-capabilities — generic widget config form
+branch: develop | date(UTC): 2026-09-15
+
+=== (a) BASELINE (legacy AddWidgetModal 832 LOC + EditWidgetModal 496 LOC, id fixed to widget-1700000000000) ===
+ADD stat: {"id":"widget-1700000000000","type":"stat","title":"Temperature","deviceIds":["dev1"],"metricIds":["temperature"],"timeframe":{"hours":24},"visualization":{"showLegend":true,"showGrid":true},"position":{"x":0,"y":0,"w":1,"h":3}}
+ADD line-chart: {"id":"widget-1700000000000","type":"line-chart","title":"Temperature & Humidity","deviceIds":["dev1"],"metricIds":["temperature","humidity"],"timeframe":{"hours":168},"visualization":{"showLegend":true,"showGrid":true,"height":300},"position":{"x":0,"y":0,"w":2,"h":3}}
+ADD gauge: {"id":"widget-1700000000000","type":"gauge","title":"Custom Gauge","deviceIds":["dev1"],"metricIds":["co2"],"timeframe":{"hours":6},"visualization":{"showLegend":true,"showGrid":true},"position":{"x":0,"y":0,"w":1,"h":2}}
+ADD ai-insight: {"id":"widget-1700000000000","type":"ai-insight","title":"AI Insights - Living Room","deviceIds":["dev1"],"metricIds":["temperature"],"timeframe":{"hours":24},"visualization":{"showLegend":true,"showGrid":true},"position":{"x":0,"y":0,"w":2,"h":2}}
+ADD comfort-index: {"id":"widget-1700000000000","type":"comfort-index","title":"Temperature & Humidity","deviceIds":["dev1"],"metricIds":["temperature","humidity"],"timeframe":{"hours":24},"visualization":{"showLegend":true,"showGrid":true},"position":{"x":0,"y":0,"w":1,"h":3}}
+ADD weather: {"id":"widget-1700000000000","type":"weather","title":"Weather - Skopje","deviceIds":[],"metricIds":[],"timeframe":{"hours":24},"visualization":{"showLegend":true,"showGrid":true,"city":"Skopje"},"position":{"x":0,"y":0,"w":1,"h":3}}
+ADD air-quality: {"id":"widget-1700000000000","type":"air-quality","title":"Air Quality - Bitola","deviceIds":[],"metricIds":[],"timeframe":{"hours":24},"visualization":{"showLegend":true,"showGrid":true,"city":"Bitola"},"position":{"x":0,"y":0,"w":1,"h":3}}
+ADD run-suitability: {"id":"widget-1700000000000","type":"run-suitability","title":"Run Suitability - Skopje","deviceIds":["dev1"],"metricIds":[],"timeframe":{"hours":24},"visualization":{"showLegend":true,"showGrid":true,"city":"Skopje"},"position":{"x":0,"y":0,"w":3,"h":2}}
+ADD health-stats: {"id":"widget-1700000000000","type":"health-stats","title":"Health Stats - Living Room","deviceIds":["dev1"],"metricIds":[],"timeframe":{"hours":24},"visualization":{"showLegend":true,"showGrid":true,"city":"Skopje"},"position":{"x":0,"y":0,"w":1,"h":2}}
+ADD calendar: {"id":"widget-1700000000000","type":"calendar","title":"Calendar Agenda","deviceIds":[],"metricIds":[],"timeframe":{"hours":24},"visualization":{"showLegend":true,"showGrid":true},"calendar":{"icalUrl":"https://example.com/cal.ics","timeRangeHours":72},"position":{"x":0,"y":0,"w":2,"h":3}}
+ADD daily-briefing: {"id":"widget-1700000000000","type":"daily-briefing","title":"Full Briefing","deviceIds":[],"metricIds":[],"timeframe":{"hours":24},"visualization":{"showLegend":true,"showGrid":true,"city":"Skopje"},"briefing":{"briefingType":"full","city":"Skopje","healthDeviceId":"dev1","calendarUrl":"https://example.com/cal.ics","calendarRangeHours":72},"position":{"x":0,"y":0,"w":4,"h":2}}
+EDIT stat: {"title":"Temperature (edited)","deviceIds":["dev1"],"metricIds":["temperature"],"timeframe":{"hours":6},"position":{"x":0,"y":0,"w":2,"h":2}}
+EDIT line-chart: {"title":"Temperature & Humidity (edited)","deviceIds":["dev1"],"metricIds":["co2"],"timeframe":{"hours":6},"position":{"x":0,"y":0,"w":2,"h":2}}
+EDIT gauge: {"title":"Custom Gauge (edited)","deviceIds":["dev1"],"metricIds":["co2"],"timeframe":{"hours":6},"position":{"x":0,"y":0,"w":2,"h":2}}
+EDIT ai-insight: {"title":"AI Insights - Living Room (edited)","deviceIds":["dev1"],"metricIds":["temperature"],"timeframe":{"hours":6},"position":{"x":0,"y":0,"w":2,"h":2}}
+EDIT comfort-index: {"title":"Temperature & Humidity (edited)","deviceIds":["dev1"],"metricIds":["temperature","humidity"],"timeframe":{"hours":6},"position":{"x":0,"y":0,"w":2,"h":2}}
+EDIT weather: {"title":"Weather - Skopje (edited)","deviceIds":[],"metricIds":[],"timeframe":{"hours":6},"position":{"x":0,"y":0,"w":2,"h":2}}
+EDIT air-quality: {"title":"Air Quality - Bitola (edited)","deviceIds":[],"metricIds":[],"timeframe":{"hours":6},"position":{"x":0,"y":0,"w":2,"h":2}}
+EDIT run-suitability: {"title":"Run Suitability - Skopje (edited)","deviceIds":[],"metricIds":[],"timeframe":{"hours":6},"position":{"x":0,"y":0,"w":2,"h":2}}
+EDIT health-stats: {"title":"Health Stats - Living Room (edited)","deviceIds":[],"metricIds":[],"timeframe":{"hours":6},"position":{"x":0,"y":0,"w":2,"h":2}}
+EDIT calendar: {"title":"Calendar Agenda (edited)","calendar":{"icalUrl":"https://example.com/other.ics","timeRangeHours":72},"position":{"x":0,"y":0,"w":2,"h":2}}
+EDIT daily-briefing: {"title":"Full Briefing (edited)","visualization":{"showLegend":true,"showGrid":true,"city":"Ohrid"},"briefing":{"briefingType":"schedule","city":"Ohrid","healthDeviceId":"dev1","calendarUrl":"https://example.com/cal.ics","calendarRangeHours":72},"position":{"x":0,"y":0,"w":2,"h":2}}
+FAILBASE add-stat-no-device: blocked: Please select a device
+FAILBASE add-stat-no-metric: blocked: Please select at least one metric
+FAILBASE add-calendar-no-url: blocked: Please provide an iCal URL
+FAILBASE add-wellness-no-city: blocked: Please enter a city for wellness widgets
+FAILBASE edit-calendar-no-url: blocked: Please provide an iCal URL
+FAILBASE edit-briefing-no-city: blocked: Please enter a city
+FAILBASE edit-stat-no-metric: blocked: Please select at least one metric
+
+=== (b) IMPLEMENTATION ===
+new: frontend/src/components/WidgetConfigForm.tsx (generic renderer, add 3-step wizard + edit form)
+new: frontend/src/components/widgets/configSchema.ts (shared values/fields/builders/validators)
+new: frontend/src/components/widgets/widgetSchemas.ts (Record<WidgetType,schema> + picker-ordered list)
+new: frontend/src/components/widgets/<11 names>/schema.ts (meta+flags+fields per widget)
+rewrite: AddWidgetModal.tsx (832->thin wrapper), EditWidgetModal.tsx (496->thin wrapper); props + call sites unchanged
+read-only honored: registry.ts, 11 widget implementations, App.tsx/AppLayout/auth/hooks/theme untouched (git status proof below)
+behavior note: alert() blocking replaced with inline field-level error box; validation order/messages unchanged
+known legacy quirk preserved byte-for-byte: edit of run-suitability/health-stats wipes deviceIds/metricIds (editNeedsDevice=false), wellness/briefing add forces h=2
+
+=== (c) VERIFY: byte-identity harness (new compiled builders vs baseline, JSON.stringify order-sensitive) ===
+V PASS schema-count
+V PASS add-validate-stat
+V PASS add-build-stat
+V PASS add-validate-line-chart
+V PASS add-build-line-chart
+V PASS add-validate-gauge
+V PASS add-build-gauge
+V PASS add-validate-ai-insight
+V PASS add-build-ai-insight
+V PASS add-validate-comfort-index
+V PASS add-build-comfort-index
+V PASS add-validate-weather
+V PASS add-build-weather
+V PASS add-validate-air-quality
+V PASS add-build-air-quality
+V PASS add-validate-run-suitability
+V PASS add-build-run-suitability
+V PASS add-validate-health-stats
+V PASS add-build-health-stats
+V PASS add-validate-calendar
+V PASS add-build-calendar
+V PASS add-validate-daily-briefing
+V PASS add-build-daily-briefing
+V PASS edit-validate-stat
+V PASS edit-build-stat
+V PASS edit-merged-valid-stat
+V PASS edit-validate-line-chart
+V PASS edit-build-line-chart
+V PASS edit-merged-valid-line-chart
+V PASS edit-validate-gauge
+V PASS edit-build-gauge
+V PASS edit-merged-valid-gauge
+V PASS edit-validate-ai-insight
+V PASS edit-build-ai-insight
+V PASS edit-merged-valid-ai-insight
+V PASS edit-validate-comfort-index
+V PASS edit-build-comfort-index
+V PASS edit-merged-valid-comfort-index
+V PASS edit-validate-weather
+V PASS edit-build-weather
+V PASS edit-merged-valid-weather
+V PASS edit-validate-air-quality
+V PASS edit-build-air-quality
+V PASS edit-merged-valid-air-quality
+V PASS edit-validate-run-suitability
+V PASS edit-build-run-suitability
+V PASS edit-merged-valid-run-suitability
+V PASS edit-validate-health-stats
+V PASS edit-build-health-stats
+V PASS edit-merged-valid-health-stats
+V PASS edit-validate-calendar
+V PASS edit-build-calendar
+V PASS edit-merged-valid-calendar
+V PASS edit-validate-daily-briefing
+V PASS edit-build-daily-briefing
+V PASS edit-merged-valid-daily-briefing
+V PASS blocked-add-stat-no-device
+V PASS blocked-add-stat-no-metric
+V PASS blocked-add-calendar-no-url
+V PASS blocked-add-wellness-no-city
+V PASS blocked-edit-calendar-no-url
+V PASS blocked-edit-briefing-no-city
+V PASS blocked-edit-stat-no-metric
+V ALL CHECKS PASSED
+BUILD: frontend npm run build exit 0 (tsc -b + vite, 933 modules, dist written)
+TSC: npx tsc -b clean | LINT: eslint on all 15 new/changed files clean
+BUNDLE: dist contains generic form strings ("Widget Summary","Daily Briefing" present in bundle js)
+
+=== (d) MANUAL-QA (binary observables; no live browser in this env) ===
+create: all 11 widget types creatable via generic form — proven by add-build PASS x11 in harness + picker renders all 11 schemas (schema-count PASS)
+edit: all 11 types editable — edit-build PASS x11, merged widgets pass isWidgetConfig x11
+invalid-config blocked, no widget created: 7/7 failure paths blocked with field-level message (see V blocked-* PASS lines)
+visual parity: type-picker buttons reuse verbatim icon paths/labels/blurbs; daisyUI classes copied from legacy JSX; modal chrome identical
+not browser-clicked (env has no browser tool): stated explicitly; UI field parity established by construction + tsc/eslint/build gates
+ M frontend/src/components/AddWidgetModal.tsx
+ M frontend/src/components/EditWidgetModal.tsx
+?? frontend/src/components/WidgetConfigForm.tsx
+?? frontend/src/components/widgets/ai-insight/
+?? frontend/src/components/widgets/air-quality/
+?? frontend/src/components/widgets/calendar/
+?? frontend/src/components/widgets/comfort-index/
+?? frontend/src/components/widgets/configSchema.ts
+?? frontend/src/components/widgets/daily-briefing/
+?? frontend/src/components/widgets/gauge/
+?? frontend/src/components/widgets/health-stats/
+?? frontend/src/components/widgets/line-chart/
+?? frontend/src/components/widgets/run-suitability/
+?? frontend/src/components/widgets/stat/
+?? frontend/src/components/widgets/weather/
+?? frontend/src/components/widgets/widgetSchemas.ts
+
+=== (e) SCOPE PROOF ===
+App.tsx/AppLayout/auth/hooks/theme/registry/widget-impls: absent from status above = untouched. dirty_worktree siblings (.omo noise, other branches' files): untouched.
