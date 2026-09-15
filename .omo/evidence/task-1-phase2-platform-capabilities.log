@@ -1,0 +1,86 @@
+# Task 1 — MQTT payload hardening at _on_message chokepoint
+# Branch: develop | Date (UTC): 2026-09-15
+# Scope: services/mqtt_ingestion/src/mqtt_client.py only (+ read-only config.py, main.py)
+
+## 1. BASELINE (unchanged code, commit f50df3e) — proves malformed payloads flow
+Invalid topic format: devices/x/y/z
+Invalid payload for devices/a1b2c3d4/temperature: b'abc'
+empty device_id: topic=devices//temperature payload=b'23.5' -> flowed=True received=[('', 'temperature', 23.5)] dropped_total=0 (delta=0)
+4-part topic: topic=devices/x/y/z payload=b'23.5' -> flowed=False received=[] dropped_total=0 (delta=0)
+nan payload: topic=devices/a1b2c3d4/temperature payload=b'nan' -> flowed=True received=[('a1b2c3d4', 'temperature', nan)] dropped_total=0 (delta=0)
+inf payload: topic=devices/a1b2c3d4/temperature payload=b'inf' -> flowed=True received=[('a1b2c3d4', 'temperature', inf)] dropped_total=0 (delta=0)
+neg inf payload: topic=devices/a1b2c3d4/temperature payload=b'-inf' -> flowed=True received=[('a1b2c3d4', 'temperature', -inf)] dropped_total=0 (delta=0)
+non-numeric payload: topic=devices/a1b2c3d4/temperature payload=b'abc' -> flowed=False received=[] dropped_total=0 (delta=0)
+valid: topic=devices/a1b2c3d4/temperature payload=b'23.5' -> flowed=True received=[('a1b2c3d4', 'temperature', 23.5)] dropped_total=0 (delta=0)
+EXIT=0 (baseline probe exit)
+
+BASELINE VERDICT: empty device_id FLOWED, nan/inf/-inf FLOWED, no dropped_total increments (all delta=0) -> bug confirmed.
+
+## 2. POST-FIX UNIT VERIFICATION (exit 0, 13/13 PASS)
+Dropping message with empty device_id: devices//temperature (reason=empty-device-id dropped_total=1)
+Dropping message with empty device_id: devices/ /temperature (reason=empty-device-id dropped_total=2)
+Dropping message with empty metric: devices/a1b2c3d4/ (reason=empty-metric dropped_total=3)
+Dropping message with invalid topic shape: devices/x/y/z (reason=invalid-topic-shape dropped_total=4)
+Dropping message with invalid topic shape: sensors/a1b2c3d4/temperature (reason=invalid-topic-shape dropped_total=5)
+Dropping message with non-finite value for devices/a1b2c3d4/temperature: nan (reason=non-finite-value dropped_total=6)
+Dropping message with non-finite value for devices/a1b2c3d4/temperature: nan (reason=non-finite-value dropped_total=7)
+Dropping message with non-finite value for devices/a1b2c3d4/temperature: inf (reason=non-finite-value dropped_total=8)
+Dropping message with non-finite value for devices/a1b2c3d4/temperature: -inf (reason=non-finite-value dropped_total=9)
+Dropping message with non-finite value for devices/a1b2c3d4/temperature: inf (reason=non-finite-value dropped_total=10)
+Dropping message with invalid payload for devices/a1b2c3d4/temperature: b'abc' (reason=invalid-payload dropped_total=11)
+Dropping message with invalid payload for devices/a1b2c3d4/temperature: b'' (reason=invalid-payload dropped_total=12)
+[PASS] empty device_id: flowed=False (expect False) dropped_delta=1 dropped_total=1
+[PASS] whitespace device_id: flowed=False (expect False) dropped_delta=1 dropped_total=2
+[PASS] empty metric: flowed=False (expect False) dropped_delta=1 dropped_total=3
+[PASS] 4-part topic: flowed=False (expect False) dropped_delta=1 dropped_total=4
+[PASS] wrong prefix: flowed=False (expect False) dropped_delta=1 dropped_total=5
+[PASS] nan: flowed=False (expect False) dropped_delta=1 dropped_total=6
+[PASS] NaN: flowed=False (expect False) dropped_delta=1 dropped_total=7
+[PASS] inf: flowed=False (expect False) dropped_delta=1 dropped_total=8
+[PASS] neg inf: flowed=False (expect False) dropped_delta=1 dropped_total=9
+[PASS] Infinity: flowed=False (expect False) dropped_delta=1 dropped_total=10
+[PASS] non-numeric: flowed=False (expect False) dropped_delta=1 dropped_total=11
+[PASS] empty payload: flowed=False (expect False) dropped_delta=1 dropped_total=12
+[PASS] valid: flowed=True (expect True) dropped_delta=0 dropped_total=12
+TOTAL_DROPPED=12 FAILS=0
+POSTFIX_EXIT=0
+
+## 3. LIVE REDIS END-TO-END (real RedisWriter + live redis container)
+Dropping message with empty device_id: devices//temperature (reason=empty-device-id dropped_total=1)
+Dropping message with invalid topic shape: devices/x/y/z (reason=invalid-topic-shape dropped_total=2)
+Dropping message with non-finite value for devices/a1b2c3d4/temperature: nan (reason=non-finite-value dropped_total=3)
+Dropping message with non-finite value for devices/a1b2c3d4/temperature: inf (reason=non-finite-value dropped_total=4)
+Dropping message with non-finite value for devices/a1b2c3d4/temperature: -inf (reason=non-finite-value dropped_total=5)
+Dropping message with invalid payload for devices/a1b2c3d4/temperature: b'abc' (reason=invalid-payload dropped_total=6)
+XLEN_BEFORE=1
+XLEN_AFTER_MALFORMED=1 (delta=0, expect 0) dropped_total=6
+XLEN_AFTER_VALID=2 (delta=1, expect 1)
+XRANGE_LAST5:
+  b'1789481574335-0' {b'device_id': b'a1b2c3d4', b'metric': b'temperature', b'value': b'23.5', b'timestamp': b'2026-09-15T14:12:54.335211'}
+  b'1789481580863-0' {b'device_id': b'a1b2c3d4', b'metric': b'temperature', b'value': b'23.5', b'timestamp': b'2026-09-15T14:13:00.863758'}
+LIVE_RESULT=PASS
+LIVE_EXIT=0 (expect 0)
+
+## 4. MANUAL-QA ARTIFACT: redis-cli XRANGE mqtt:ingestion - + COUNT 5 (live redis)
+1789481574335-0
+device_id
+a1b2c3d4
+metric
+temperature
+value
+23.5
+timestamp
+2026-09-15T14:12:54.335211
+1789481580863-0
+device_id
+a1b2c3d4
+metric
+temperature
+value
+23.5
+timestamp
+2026-09-15T14:13:00.863758
+XRANGE_EXIT=0 (expect 0)
+2
+
+BINARY OBSERVABLE: valid entry {device_id=a1b2c3d4, metric=temperature, value=23.5} PRESENT; all 6 malformed messages ABSENT (XLEN delta 0 after malformed batch, +1 after valid).
