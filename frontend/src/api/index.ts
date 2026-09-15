@@ -47,6 +47,30 @@ export const devicesApi = {
   
   renew: (id: string) =>
     apiClient.post<DeviceRegistrationResponse>(`/devices/${id}/renew/`),
+
+  sendCommand: (id: string, data: {
+    action: string;
+    payload?: Record<string, unknown>;
+    ttl_sec?: number;
+  }) =>
+    apiClient.post<{
+      req_id: string;
+      device_id: string;
+      action: string;
+      state: string;
+      ttl_sec: number;
+    }>(`/devices/${id}/commands/`, data),
+
+  getCommandStatus: (id: string, reqId: string) =>
+    apiClient.get<{
+      req_id: string;
+      device_id: string;
+      action: string;
+      state: 'requested' | 'acked' | 'expired' | 'failed';
+      ttl_sec: number;
+      created_at: string | null;
+      acked_at: string | null;
+    }>(`/devices/${id}/commands/${reqId}/`),
   
   getTelemetry: (id: string, params?: {
     metric?: string;

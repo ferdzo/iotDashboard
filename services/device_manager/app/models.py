@@ -66,3 +66,15 @@ class CommandResponse(BaseModel):
     action: str
     state: str
     ttl_sec: int
+
+
+class CommandStatus(BaseModel):
+    """Read-only command tracking record (todo 10 status polling)."""
+
+    req_id: str
+    device_id: str
+    action: str
+    state: str
+    ttl_sec: int
+    created_at: datetime.datetime | None = None
+    acked_at: datetime.datetime | None = None

@@ -5,6 +5,18 @@ import { devicesApi } from '../api'
 import DeleteDeviceDialog from '../components/DeleteDeviceDialog'
 import RenewDialog from '../components/RenewDialog'
 import RevokeDialog from '../components/RevokeDialog'
+import CommandDialog from '../components/CommandDialog'
+
+const COMMAND_STATE_BADGE: Record<string, string> = {
+  requested: 'badge-info',
+  acked: 'badge-success',
+  expired: 'badge-warning',
+  failed: 'badge-error',
+}
+
+function commandStateBadgeClass(state: string): string {
+  return COMMAND_STATE_BADGE[state] ?? 'badge-ghost'
+}
 
 export default function DeviceDetail() {
   const { id } = useParams<{ id: string }>()
@@ -12,6 +24,8 @@ export default function DeviceDetail() {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [renewOpen, setRenewOpen] = useState(false)
   const [revokeOpen, setRevokeOpen] = useState(false)
+  const [commandOpen, setCommandOpen] = useState(false)
+  const [lastReqId, setLastReqId] = useState<string | null>(null)
 
   const { data: device, isLoading } = useQuery({
     queryKey: ['device', id],
@@ -20,6 +34,19 @@ export default function DeviceDetail() {
       return response.data
     },
     enabled: !!id,
+  })
+
+  const { data: commandStatus } = useQuery({
+    queryKey: ['commandStatus', id, lastReqId],
+    queryFn: async () => {
+      const response = await devicesApi.getCommandStatus(id!, lastReqId!)
+      return response.data
+    },
+    enabled: !!id && !!lastReqId,
+    // Poll command_log state until the command settles; terminal states
+    // (acked/expired/failed) stop polling.
+    refetchInterval: (query) =>
+      query.state.data?.state === 'requested' ? 2000 : false,
   })
 
   if (isLoading) {
@@ -143,6 +170,35 @@ export default function DeviceDetail() {
             </div>
           )}
 
+          {/* Command panel */}
+          <div className="mt-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold">Device Commands</h3>
+              <button className="btn btn-outline btn-primary btn-sm" onClick={() => setCommandOpen(true)}>
+                Send Command
+              </button>
+            </div>
+            {lastReqId ? (
+              <div className="flex items-center gap-3 flex-wrap">
+                <code className="bg-base-200 px-3 py-1 rounded text-sm">{lastReqId}</code>
+                {commandStatus ? (
+                  <div className={`badge ${commandStateBadgeClass(commandStatus.state)}`}>
+                    {commandStatus.state}
+                  </div>
+                ) : (
+                  <span className="loading loading-spinner loading-sm"></span>
+                )}
+                {commandStatus && (
+                  <span className="text-sm text-base-content/70">
+                    {commandStatus.action} · TTL {commandStatus.ttl_sec}s
+                  </span>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-base-content/70">No commands sent yet from this view.</p>
+            )}
+          </div>
+
           {/* Action Buttons */}
           <div className="card-actions justify-end mt-6">
             {device.protocol === 'mqtt' && (
@@ -167,6 +223,12 @@ export default function DeviceDetail() {
         open={deleteOpen}
         onOpenChange={(open) => setDeleteOpen(open)}
         onDeleted={() => navigate('/devices')}
+      />
+      <CommandDialog
+        device={device}
+        open={commandOpen}
+        onOpenChange={(open) => setCommandOpen(open)}
+        onSent={(reqId) => setLastReqId(reqId)}
       />
       {device.protocol === 'mqtt' && (
         <>
