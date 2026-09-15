@@ -1,0 +1,61 @@
+=== TASK 7 BFF publish path evidence ===
+date: 2026-09-15T21:30Z (UTC)
+branch: develop
+head-pre: 3e63bd1 feat(actuation): command_log table
+
+--- (a) BASELINE (unchanged code) ---
+TestClient POST /devices/abcdef12/commands {"action":"reboot","payload":{},"ttl_sec":300}
+-> status 404, body {"detail":"Not Found"} (exit 0). BASELINE HOLDS: endpoint absent.
+
+--- (b) IMPLEMENT (tracked code files only) ---
+mod: iotDashboard/device_manager_client.py (CommandSendResponse + send_command(device_id, action, payload, ttl_sec) + module fn)
+mod: services/device_manager/app/app.py (POST /devices/{device_id}/commands: 404 unknown / 422 bad action|ttl / publish QoS1 retain=False / 502 publish-fail / 500 tracking-write-fail / command_log requested row / CommandResponse{req_id})
+mod: services/device_manager/app/config.py (MQTT_BROKER/PORT/TLS/CA_CERT/COMMAND_CERT/COMMAND_KEY env)
+mod: services/device_manager/app/models.py (CommandRequest{action,payload,ttl_sec=300} / CommandResponse{req_id,device_id,action,state,ttl_sec})
+mod: services/device_manager/app/db_models.py (CommandLog mirror of e5f2a9c41d7b)
+new: services/device_manager/app/mqtt_publisher.py (publish_command QoS1 retain=False; tls_set(ca_certs,certfile,keyfile,PROTOCOL_TLS_CLIENT) same shape as mqtt_ingestion mqtt_client.py:125-130; loop_start/stop around wait_for_publish so PUBACK is received)
+mod: services/device_manager/pyproject.toml + uv.lock (uv add paho-mqtt -> 2.1.0, same floor as mqtt_ingestion)
+command identity (RUNTIME, gitignored, never committed): infrastructure/mosquitto/certs/command.crt (644) + command.key (600), CN=device-manager-command, signed by real broker CA (notBefore 2026-09-15, notAfter 2028-12-18, openssl verify OK). ownership/perms match ingestion.crt/key siblings.
+telemetry path untouched: mqtt_client.py, redis_writer.py, registry.py, db_write, schema — no diffs.
+
+--- (c) VERIFY (live; pg=docker infrastructure-timescaledb-1, broker=docker infrastructure-mosquitto-1) ---
+env findings (binaries, not assumptions):
+- host TCP 127.0.0.1:1883 reaches NO broker log line: mosquitto.conf binds 1883 to 127.0.0.1 *inside the container netns*, so the published host port is unusable (docker-proxy accepts then drops; paho never gets CONNACK). Host QA MUST use 8883+mTLS. Documented here so nobody re-tries 1883 from host.
+- PG TCP password is init-time "example" (container env now says "postgres"; stale). Host QA used postgresql://postgres:example@localhost:5432/iot_data. No committed file contains it.
+- broker image has no openssl CLI: command identity key/CSR created with host openssl, CA key read once via docker exec -u 0 cat into /tmp/opencode (600), shredded after use (receipt below).
+- paho-mqtt 2.1.0 verifies hostname: server.crt SAN = DNS localhost + IP 10.10.1.114, so MQTT_BROKER must be "localhost" (not 127.0.0.1) under TLS. Code default MQTT_BROKER=localhost already complies.
+- publisher bug caught live: first smoke 502 "publish not acknowledged" because QoS1 needs loop_start() for PUBACK; fixed (loop_start/stop), re-verified green.
+server: uvicorn app.app:app 127.0.0.1:8007, MQTT_TLS=true PORT=8883 CA=$infra/ca.crt CMD_CERT=$infra/command.crt CMD_KEY=/tmp copy (600, shredded after).
+
+happy path (real DeviceManagerClient over HTTP):
+- register t7-e2e (mqtt) -> device_id=w2cru68y (200)
+- send_command(w2cru68y, set_threshold, {temp:25}, 300) -> req_id=3e94e2f4ee36146de702ef00a93175eb state=requested ttl_sec=300 (exit 0)
+- mosquitto_sub (container-local 1883, same broker) on devices/+/commands/# got exactly:
+  devices/w2cru68y/commands/set_threshold {"req_id":"3e94e2f4ee36146de702ef00a93175eb","device_id":"w2cru68y","action":"set_threshold","payload":{"temp":25},"ttl_sec":300,"expires_at":"2026-09-15T21:27:41.682200+00:00"}
+  req_id MATCHES client return; req_id + expiry present in payload; topic devices/{id}/commands/{action}; QoS1 published (wait_for_publish true); retain=False in code (no retained allowed).
+- psql: command_log row (3e94e2f4..., w2cru68y, set_threshold, requested, 300) = 1 row. unknown_rows(device 00000000) = 0.
+mTLS proof: standalone paho tls_set(ca.crt, command.crt, command.key) -> localhost:8883 CONNACK rc=0, QoS1 published True, broker received (separate probe before BFF run).
+
+failure path:
+- send_command(00000000, reboot) -> DeviceManagerAPIError 404 "Device not found" (exit 0)
+- parallel mosquitto_sub -C 1 -W 12 on devices/+/commands/# -> "Timed out" (no publish)
+- psql count command_log where device_id='00000000' -> 0 (no row)
+- validation: action "a/b" -> 422; ttl enforced 1..86400 in code.
+
+--- (d) MANUAL-QA (binary observables) ---
+broker dump line above: topic + JSON with matching req_id (copy-pasted, not retyped).
+psql row above: requested/300 (copy-pasted).
+mosquitto_sub exit capture1=0 (message), capture2 timeout nonzero-path "Timed out".
+curl GET / 127.0.0.1:8007 -> {"Hello":"World"} pre-run; port closed after kill (000).
+
+--- (e) SCOPE / ADVERSARIAL NOTES ---
+- dirty_worktree: services/mqtt_ingestion/main.py appeared Modified mid-task (sibling todo-9 expiry sweep, +21 lines, untouched by me). At commit time it no longer shows as modified (sibling resolved it); my commit stages ONLY the 7 tracked files + mqtt_publisher.py + this log. Verified via git status.
+- misleading_success_output: first smoke "send: 502" looked like app error but was real broker-ack failure; fixed in code, not masked. Heredoc/docker-exec stdin pitfall from todo 6 avoided by using -c flags and file capture.
+- hung commands: every broker/sub/uv call wrapped in timeout (<=110s); background sub reaped with wait; uvicorn killed, port confirmed closed.
+- stale_state: fresh req_id per run; DB counts queried after each step, not cached.
+
+--- (f) CLEANUP RECEIPT ---
+- test device w2cru68y deleted via API (cascade): command_log count=0; devices name like 't7-%' = 0 rows. Earlier smoke devices (ce2icdw7, qqshparq) deleted same way during iteration.
+- temp secrets shredded: shred -u /tmp/opencode/task7/priv/* (real-ca.key copy, command.key QA copy, csr, srl); rm harness *.py, captures, uvicorn.log, throwaway CA; /tmp/opencode/task7 empty (ls confirmed).
+- KEPT (runtime, gitignored): infrastructure/mosquitto/certs/command.{crt,key} for compose device-manager (matches ingestion.* pattern; *.crt/*.key + mosquitto/certs/ are gitignored, commit excludes them).
+- commit: single feat(actuation) commit, NO push.
