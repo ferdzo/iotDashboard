@@ -1,0 +1,128 @@
+# Task 2 — Per-metric validation ranges in schema layer — evidence
+# Repo: /home/ferdzo/projects/iotDashboard, branch: develop
+
+## (a) BASELINE (unchanged code, services/db_write/src/schema.py validate_reading warns-only beyond +-1e6)
+temperature 22.5 valid: -> TELEMETRY ROW {'time': datetime.datetime(2026, 9, 15, 0, 0, tzinfo=datetime.timezone.utc), 'device_id': 'dev1', 'metric': 'temperature', 'value': 22.5, 'unit': None}
+temperature 9999 OOR: -> TELEMETRY ROW {'time': datetime.datetime(2026, 9, 15, 0, 0, tzinfo=datetime.timezone.utc), 'device_id': 'dev1', 'metric': 'temperature', 'value': 9999.0, 'unit': None}
+humidity 55 valid: -> TELEMETRY ROW {'time': datetime.datetime(2026, 9, 15, 0, 0, tzinfo=datetime.timezone.utc), 'device_id': 'dev1', 'metric': 'humidity', 'value': 55.0, 'unit': None}
+humidity 150 OOR: -> TELEMETRY ROW {'time': datetime.datetime(2026, 9, 15, 0, 0, tzinfo=datetime.timezone.utc), 'device_id': 'dev1', 'metric': 'humidity', 'value': 150.0, 'unit': None}
+co2 800 valid: -> TELEMETRY ROW {'time': datetime.datetime(2026, 9, 15, 0, 0, tzinfo=datetime.timezone.utc), 'device_id': 'dev1', 'metric': 'co2', 'value': 800.0, 'unit': None}
+co2 99999 OOR: -> TELEMETRY ROW {'time': datetime.datetime(2026, 9, 15, 0, 0, tzinfo=datetime.timezone.utc), 'device_id': 'dev1', 'metric': 'co2', 'value': 99999.0, 'unit': None}
+EXIT:0
+# BASELINE CONCLUSION: temperature 9999, humidity 150, co2 99999 all -> TELEMETRY ROW (invalid currently writes; warns-only). FAILING PROOF saved.
+
+## (c) POST-FIX VERIFY — schema suite (53 checks)
+PASS temperature 22.5 -> telemetry row [{'time': datetime.datetime(2026, 9, 15, 0, 0, tzinfo=datetime.timezone.utc), 'device_id': 'dev1', 'metric': 'temperature', 'value': 22.5, 'unit': '°C'}]
+PASS temperature 22.5 default unit °C ['°C']
+PASS temperature 9999 -> rejected (None)
+PASS temperature 9999 error carries validation-failed [temperature value 9999.0 out of range [-50.0, 60.0] °C (validation-failed)]
+PASS temperature spec unit °C
+PASS temperature min=-50 -> row
+PASS temperature max=60 -> row
+PASS temperature min-1=-51 -> reject
+PASS temperature max+1=61 -> reject
+PASS humidity spec unit %
+PASS humidity min=0 -> row
+PASS humidity max=100 -> row
+PASS humidity min-1=-1 -> reject
+PASS humidity max+1=101 -> reject
+PASS co2 spec unit ppm
+PASS co2 min=300 -> row
+PASS co2 max=5000 -> row
+PASS co2 min-1=299 -> reject
+PASS co2 max+1=5001 -> reject
+PASS pressure spec unit hPa
+PASS pressure min=800 -> row
+PASS pressure max=1100 -> row
+PASS pressure min-1=799 -> reject
+PASS pressure max+1=1101 -> reject
+PASS light spec unit lux
+PASS light min=0 -> row
+PASS light max=100000 -> row
+PASS light min-1=-1 -> reject
+PASS light max+1=100001 -> reject
+PASS noise spec unit dB
+PASS noise min=0 -> row
+PASS noise max=140 -> row
+PASS noise min-1=-1 -> reject
+PASS noise max+1=141 -> reject
+PASS pm25 spec unit µg/m³
+PASS pm25 min=0 -> row
+PASS pm25 max=1000 -> row
+PASS pm25 min-1=-1 -> reject
+PASS pm25 max+1=1001 -> reject
+PASS voc spec unit ppb
+PASS voc min=0 -> row
+PASS voc max=5000 -> row
+PASS voc min-1=-1 -> reject
+PASS voc max+1=5001 -> reject
+PASS explicit metadata unit propagated untouched ['degC-custom']
+PASS humidity default unit % ['%']
+PASS unknown metric still passes [{'time': datetime.datetime(2026, 9, 15, 0, 0, tzinfo=datetime.timezone.utc), 'device_id': 'dev1', 'metric': 'vibration', 'value': 3.3, 'unit': None}]
+PASS unknown metric 9999 still passes (generic guard)
+PASS temperature nan rejected
+PASS temperature inf rejected
+PASS temperature -inf rejected
+PASS pm25 0 passes
+PASS voc 0 passes
+# NOTE: harness exit 1 is ONLY the final section importing services/db_write/main.py under system python (No module named structlog); all 53 schema checks PASS. Service-level split covered by stubbed suite below (8/8 PASS, exit 0).
+
+## (c) POST-FIX VERIFY — service-level DLQ split suite
+PASS mixed batch: 2 readings [2]
+PASS mixed batch: valid ids v1,v2
+PASS mixed batch: failed ids i1,i2
+PASS mixed DLQ stored 2 with reason validation-failed [[('validation-failed', ['i1', 'i2'])]]
+PASS mixed DLQ holds only invalid ids [[('validation-failed', ['i1', 'i2'])]]
+PASS telemetry rows only from valid
+PASS all-invalid: zero rows
+PASS all-invalid: 2 failed, 0 valid (PEL-analog: nothing writable)
+
+## (d) MANUAL-QA (live infra, 2026-09-15T14:18:45Z)
+-- redis: infrastructure-redis-1 is DOWN (User requested shutdown 2026-09-15 14:13:09Z, parallel-wave activity suspected); XRANGE mqtt:dlq not runnable. Redis NOT restarted to avoid cross-task interference. DLQ field shape proven via _dead_letter code inspection + mocked service-level suite above (reason=validation-failed, invalid ids only).
+-- earlier probe (ephemeral iot-redis-task5, now gone): XLEN mqtt:dlq=0, XLEN mqtt:ingestion=51000; XADD canary attempts confirmed _dead_letter field shape (stream_key,message_id,device_id,metric,value,timestamp,reason); canary cleaned (XDEL).
+-- psql (infrastructure-timescaledb-1, Up/healthy): SELECT count(*) FROM telemetry => 0 rows (binary observable; no invalid rows present; transform-level proof shows invalids never become rows).
+telemetry_count= 0
+
+## (e) SCOPE PROOF
+ M services/db_write/main.py
+ M services/db_write/src/schema.py
+ M services/mqtt_ingestion/src/registry.py
+?? .omo/boulder.json
+?? .omo/drafts/
+?? .omo/evidence/db-write-todo14.log
+?? .omo/evidence/django-runserver-todo11.log
+?? .omo/evidence/django-runserver-todo19.log
+?? .omo/evidence/django-runserver-todo7.log
+?? .omo/evidence/django-runserver-todo8.log
+?? .omo/evidence/django-runserver-todo9.log
+?? .omo/evidence/final-verification-all-around-iot-platform.log
+?? .omo/evidence/mqtt-ingestion-todo13.log
+?? .omo/evidence/task-1-all-around-iot-platform.log
+?? .omo/evidence/task-10-all-around-iot-platform.log
+?? .omo/evidence/task-11-all-around-iot-platform.log
+?? .omo/evidence/task-12-all-around-iot-platform.log
+?? .omo/evidence/task-13-all-around-iot-platform.log
+?? .omo/evidence/task-14-all-around-iot-platform.log
+?? .omo/evidence/task-15-16-17-all-around-iot-platform.log
+?? .omo/evidence/task-18-all-around-iot-platform.log
+?? .omo/evidence/task-19-all-around-iot-platform.log
+?? .omo/evidence/task-2-all-around-iot-platform.log
+?? .omo/evidence/task-2-phase2-platform-capabilities.log
+?? .omo/evidence/task-20-all-around-iot-platform.log
+?? .omo/evidence/task-3-all-around-iot-platform.log
+?? .omo/evidence/task-3-phase2-platform-capabilities.log
+?? .omo/evidence/task-4-all-around-iot-platform.log
+?? .omo/evidence/task-5-all-around-iot-platform.log
+?? .omo/evidence/task-6-all-around-iot-platform.log
+?? .omo/evidence/task-7-all-around-iot-platform.log
+?? .omo/evidence/task-8-all-around-iot-platform.json
+?? .omo/evidence/task-8-all-around-iot-platform.log
+?? .omo/evidence/task-9-all-around-iot-platform.log
+?? .omo/plans/
+?? .omo/run-continuation/
+?? .omo/start-work/
+--- diff stat ---
+ services/db_write/main.py               | 35 +++++++++++-----
+ services/db_write/src/schema.py         | 72 +++++++++++++++++++++++++++++++++
+ services/mqtt_ingestion/src/registry.py | 37 ++++++++++++-----
+ 3 files changed, 126 insertions(+), 18 deletions(-)
