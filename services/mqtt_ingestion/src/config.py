@@ -26,6 +26,10 @@ class MQTTConfig:
     ca_cert: Optional[str] = None
     client_cert: Optional[str] = None
     client_key: Optional[str] = None
+    # Redis stream backpressure knobs (stream/table names unchanged)
+    maxlen: int = 100000
+    lag_warn: int = 50000
+    pipeline_batch: int = 500
 
 
 @dataclass
@@ -60,6 +64,11 @@ class Config:
             ca_cert=os.getenv("MQTT_CA_CERT", None),
             client_cert=os.getenv("MQTT_CLIENT_CERT", None),
             client_key=os.getenv("MQTT_CLIENT_KEY", None),
+            maxlen=int(os.getenv("MQTT_MAXLEN", 100000)),
+            lag_warn=int(
+                os.getenv("MQTT_LAG_WARN", os.getenv("LAG_WARN", 50000))
+            ),
+            pipeline_batch=int(os.getenv("MQTT_PIPELINE_BATCH", 500)),
         )
         self.database = DatabaseConfig(
             url=os.getenv("DATABASE_URL", None),

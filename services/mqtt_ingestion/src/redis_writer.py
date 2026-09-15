@@ -7,6 +7,8 @@ logger = logging.getLogger(__name__)
 
 
 class RedisWriter:
+    STREAM_KEY = "mqtt:ingestion"
+
     def __init__(self):
         """Initialize Redis writer with config from environment"""
         self.logger = logging.getLogger(__name__)
@@ -16,6 +18,11 @@ class RedisWriter:
             db=config.redis.db,
             password=config.redis.password,
         )
+        self.maxlen = config.mqtt.maxlen
+        self.lag_warn = config.mqtt.lag_warn
+        self.pipeline_batch = max(1, config.mqtt.pipeline_batch)
+        self._buffer: list[dict] = []
+        self.dropped_total = 0
         try:
             self.redis_client.ping()
             self.logger.info(
@@ -27,33 +34,55 @@ class RedisWriter:
 
     def write_sensor_data(self, device_id: str, sensor_type: str, value: float) -> bool:
         """
-        Write sensor data to single Redis stream for all devices.
-        - Stream: mqtt:ingestion (single stream, capped at 100k entries)
+        Buffer one sensor reading; flush via pipeline once the batch is full.
+        - Stream: mqtt:ingestion (single stream, capped at config maxlen)
+        Returns True when buffered/flushed, False only on Redis failure.
+        Call flush() (or close()) to drain a partial trailing batch.
         """
         timestamp = datetime.utcnow().isoformat()
 
-        stream_key = "mqtt:ingestion"
+        self._buffer.append(
+            {
+                "device_id": device_id,
+                "metric": sensor_type,
+                "value": str(value),
+                "timestamp": timestamp,
+            }
+        )
+        if len(self._buffer) >= self.pipeline_batch:
+            return self.flush()
+        return True
 
-        stream_data = {
-            "device_id": device_id,
-            "metric": sensor_type,
-            "value": str(value),
-            "timestamp": timestamp,
-        }
+    @property
+    def pending(self) -> int:
+        """Messages buffered but not yet flushed to Redis."""
+        return len(self._buffer)
 
+    def flush(self) -> bool:
+        """Write all buffered messages in one pipeline round-trip."""
+        if not self._buffer:
+            return True
+        batch, self._buffer = self._buffer, []
         try:
-            # Bounded stream; backlog beyond the cap loses oldest first
-            self.redis_client.xadd(stream_key, stream_data, maxlen=100000)
+            pipe = self.redis_client.pipeline(transaction=False)
+            for entry in batch:
+                pipe.xadd(self.STREAM_KEY, entry, maxlen=self.maxlen)
+            pipe.execute()
 
-            # Lag signal while the backlog is still recoverable
-            if self.redis_client.xlen(stream_key) > 50000:
+            # Lag signal while the backlog is still recoverable (one XLEN per flush)
+            if self.redis_client.xlen(self.STREAM_KEY) > self.lag_warn:
                 self.logger.warning(
-                    f"Stream {stream_key} backlog above 50k — consumer lagging"
+                    f"Stream {self.STREAM_KEY} backlog above {self.lag_warn} "
+                    f"— consumer lagging"
                 )
 
             return True
         except redis.RedisError as e:
-            self.logger.error(f"Failed to write to Redis: {e}")
+            self.dropped_total += len(batch)
+            self.logger.error(
+                f"Failed to write batch of {len(batch)} to Redis "
+                f"(dropped_total={self.dropped_total}): {e}"
+            )
             return False
 
     def health_check(self) -> bool:
@@ -65,7 +94,11 @@ class RedisWriter:
             return False
 
     def close(self):
-        """Close Redis connection"""
+        """Flush pending writes, then close Redis connection"""
+        try:
+            self.flush()
+        except Exception as e:
+            self.logger.error(f"Error flushing pending writes: {e}")
         try:
             self.redis_client.close()
             self.logger.info("Redis connection closed")

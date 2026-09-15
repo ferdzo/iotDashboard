@@ -1,0 +1,15 @@
+BASELINE unchanged code: N=5000 msgs, elapsed=0.80s, throughput=6275 msg/s, redis_cmds=10001, amortized_RTT_per_msg=2.00, XLEN=5000
+INFO src.redis_writer: Connected to Redis at localhost:6379
+INFO src.redis_writer: Connected to Redis at localhost:6379
+WARNING src.redis_writer: Stream mqtt:ingestion backlog above 50000 — consumer lagging
+WARNING src.redis_writer: Stream mqtt:ingestion backlog above 50000 — consumer lagging
+ERROR redis_down_probe: Failed to write batch of 500 to Redis (dropped_total=500): Error 111 connecting to localhost:6379. Connection refused.
+ERROR redis_down_probe: Failed to write batch of 500 to Redis (dropped_total=1000): Error 111 connecting to localhost:6379. Connection refused.
+ERROR redis_down_probe: Failed to write batch of 200 to Redis (dropped_total=1200): Error 111 connecting to localhost:6379. Connection refused.
+VERIFY burst: N=20000, ok=20000, elapsed=0.29s, throughput=69991 msg/s, pipeline_execs=40, xlen_calls=41, amortized_RTT_per_msg=0.0040, XLEN=20000
+VERIFY burst: PASS (amortized RTT/msg << 1)
+VERIFY lag: XLEN=51000 (expect 51000 + WARN above)
+VERIFY redis-down: no_exception=True, dropped_total=1200 (expect 1200), ok_flags=False expected
+VERIFY redis-down: PASS
+MANUAL-QA XLEN mqtt:ingestion = 51000
+MANUAL-QA sample entry fields=[b'device_id', b'metric', b'timestamp', b'value']
