@@ -1,4 +1,5 @@
 import datetime
+import hashlib
 import logging
 import secrets
 
@@ -7,7 +8,7 @@ from fastapi import FastAPI, HTTPException, Query
 
 from app.cert_manager import CertificateManager
 from app.database import get_db_context
-from app.db_models import Device, DeviceCertificate, DeviceOnboardingToken
+from app.db_models import Device, DeviceCertificate, DeviceCredential, DeviceOnboardingToken
 from app.models import (
     DeviceCertificateResponse,
     DeviceRegistrationRequest,
@@ -88,10 +89,55 @@ async def register_device(
                 onboarding_token=onboarding_token,
             )
 
+        elif request.protocol in ("http", "webhook"):
+            # HTTP/webhook devices: issue a raw secret once, store only its
+            # SHA-256 digest in device_credentials (verified by the
+            # mqtt_ingestion HTTP ingress sibling).
+            raw_secret = secrets.token_urlsafe(32)
+            digest = hashlib.sha256(raw_secret.encode("utf-8")).hexdigest()
+            device_id = cert_manager.generate_device_id()
+            credential_id = secrets.token_hex(12)
+            credential_type = (
+                "api_key" if request.protocol == "http" else "webhook_secret"
+            )
+
+            with get_db_context() as db:
+                device = Device(
+                    id=device_id,
+                    name=request.name,
+                    location=request.location,
+                    protocol=request.protocol,
+                    connection_config=request.connection_config,
+                    is_active=True,
+                    created_at=datetime.datetime.now(datetime.UTC),
+                )
+                db.add(device)
+
+                credential = DeviceCredential(
+                    id=credential_id,
+                    device_id=device_id,
+                    credential_type=credential_type,
+                    credential_hash=digest,
+                    created_at=datetime.datetime.now(datetime.UTC),
+                )
+                db.add(credential)
+                db.commit()
+
+            return DeviceRegistrationResponse(
+                device_id=device_id,
+                protocol=request.protocol,
+                credential_id=credential_id,
+                api_key=raw_secret if request.protocol == "http" else None,
+                webhook_secret=raw_secret
+                if request.protocol == "webhook"
+                else None,
+            )
+
         else:
             raise HTTPException(
                 status_code=400,
-                detail=f"Protocol '{request.protocol}' not yet implemented. Only 'mqtt' is supported.",
+                detail=f"Protocol '{request.protocol}' not supported. "
+                "Supported: 'mqtt', 'http', 'webhook'.",
             )
 
     except HTTPException:

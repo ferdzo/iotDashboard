@@ -38,6 +38,13 @@ class DatabaseConfig:
 
 
 @dataclass
+class HTTPConfig:
+    enabled: bool = True
+    host: str = "0.0.0.0"
+    port: int = 8080
+
+
+@dataclass
 class Payload:
     device_id: str
     sensor_type: str
@@ -72,6 +79,12 @@ class Config:
         )
         self.database = DatabaseConfig(
             url=os.getenv("DATABASE_URL", None),
+        )
+        self.http = HTTPConfig(
+            enabled=os.getenv("HTTP_INGRESS_ENABLED", "True").lower()
+            in ("1", "true", "yes"),
+            host=os.getenv("HTTP_INGRESS_HOST", "0.0.0.0"),
+            port=int(os.getenv("HTTP_INGRESS_PORT", 8080)),
         )
 
 
