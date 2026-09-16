@@ -6,16 +6,28 @@ import DeleteDeviceDialog from '../components/DeleteDeviceDialog'
 import RenewDialog from '../components/RenewDialog'
 import RevokeDialog from '../components/RevokeDialog'
 import CommandDialog from '../components/CommandDialog'
+import { PageHeader, StatusPill, EmptyState, WidgetSkeleton, WidgetError } from '../components/ui'
+import Icon from '../components/Icon'
 
-const COMMAND_STATE_BADGE: Record<string, string> = {
-  requested: 'badge-info',
-  acked: 'badge-success',
-  expired: 'badge-warning',
-  failed: 'badge-error',
+function commandStateTone(state: string): 'ok' | 'warn' | 'bad' | 'info' | 'muted' {
+  if (state === 'acked') return 'ok'
+  if (state === 'expired') return 'warn'
+  if (state === 'failed') return 'bad'
+  if (state === 'requested') return 'info'
+  return 'muted'
 }
 
-function commandStateBadgeClass(state: string): string {
-  return COMMAND_STATE_BADGE[state] ?? 'badge-ghost'
+function certTone(cert: { revoked_at?: string | null; is_expired?: boolean; is_expiring_soon?: boolean }): 'ok' | 'warn' | 'bad' {
+  if (cert.revoked_at || cert.is_expired) return 'bad'
+  if (cert.is_expiring_soon) return 'warn'
+  return 'ok'
+}
+
+function certLabel(cert: { revoked_at?: string | null; is_expired?: boolean; is_expiring_soon?: boolean }): string {
+  if (cert.revoked_at) return 'Revoked'
+  if (cert.is_expired) return 'Expired'
+  if (cert.is_expiring_soon) return 'Expiring Soon'
+  return 'Active'
 }
 
 export default function DeviceDetail() {
@@ -27,7 +39,7 @@ export default function DeviceDetail() {
   const [commandOpen, setCommandOpen] = useState(false)
   const [lastReqId, setLastReqId] = useState<string | null>(null)
 
-  const { data: device, isLoading } = useQuery({
+  const { data: device, isLoading, error } = useQuery({
     queryKey: ['device', id],
     queryFn: async () => {
       const response = await devicesApi.getOne(id!)
@@ -51,69 +63,87 @@ export default function DeviceDetail() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <span className="loading loading-spinner loading-lg"></span>
+      <div className="space-y-6">
+        <PageHeader title="Device" hint="Loading device details" />
+        <div className="card bg-base-100 border border-base-300/60">
+          <div className="card-body">
+            <WidgetSkeleton lines={5} />
+          </div>
+        </div>
       </div>
     )
   }
 
-  if (!device) {
+  if (error || !device) {
     return (
-      <div className="p-6">
-        <div className="alert alert-error">
-          <span>Device not found</span>
-        </div>
-        <Link to="/devices" className="btn btn-ghost mt-4">
-          Back to Device List
-        </Link>
+      <div className="space-y-6">
+        <PageHeader title="Device" />
+        {error ? (
+          <WidgetError message={error instanceof Error ? error.message : 'Failed to load device'} />
+        ) : (
+          <EmptyState
+            icon="chip"
+            title="Device not found"
+            hint="It may have been deleted."
+            action={
+              <Link to="/devices" className="btn btn-ghost btn-sm">
+                Back to Device List
+              </Link>
+            }
+          />
+        )}
       </div>
     )
   }
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <Link to="/devices" className="btn btn-ghost btn-sm mb-4">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
-          Back to Devices
-        </Link>
-        <h1 className="text-3xl font-bold">Device Details</h1>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title={device.name}
+        hint={device.id}
+        actions={
+          <>
+            <Link to="/devices" className="btn btn-ghost btn-sm gap-1.5">
+              <Icon name="arrow-left" className="size-4" />
+              Devices
+            </Link>
+            <button className="btn btn-primary btn-sm" onClick={() => setCommandOpen(true)}>
+              Send Command
+            </button>
+          </>
+        }
+      />
 
-      <div className="card bg-base-100 shadow-xl">
-        <div className="card-body">
-          <h2 className="card-title text-2xl mb-4">{device.name}</h2>
-
+      <div className="card bg-base-100 border border-base-300/60">
+        <div className="card-body gap-5">
           <div className="overflow-x-auto">
             <table className="table">
               <tbody>
                 <tr>
-                  <th className="w-1/3">Device ID:</th>
-                  <td><code className="bg-base-200 px-3 py-1 rounded">{device.id}</code></td>
+                  <th className="w-1/3 text-base-content/55 font-medium">Device ID</th>
+                  <td><code className="bg-base-200 px-2.5 py-1 rounded-md text-[13px] tnum">{device.id}</code></td>
                 </tr>
                 <tr>
-                  <th>Location:</th>
+                  <th className="text-base-content/55 font-medium">Location</th>
                   <td>{device.location || '—'}</td>
                 </tr>
                 <tr>
-                  <th>Protocol:</th>
+                  <th className="text-base-content/55 font-medium">Protocol</th>
                   <td>
-                    <div className="badge badge-info">{device.protocol.toUpperCase()}</div>
+                    <StatusPill tone="info">{device.protocol.toUpperCase()}</StatusPill>
                   </td>
                 </tr>
                 <tr>
-                  <th>Status:</th>
+                  <th className="text-base-content/55 font-medium">Status</th>
                   <td>
-                    <div className={`badge ${device.is_active ? 'badge-success' : 'badge-ghost'}`}>
+                    <StatusPill tone={device.is_active ? 'ok' : 'muted'}>
                       {device.is_active ? 'Active' : 'Inactive'}
-                    </div>
+                    </StatusPill>
                   </td>
                 </tr>
                 <tr>
-                  <th>Created:</th>
-                  <td>{new Date(device.created_at).toLocaleString()}</td>
+                  <th className="text-base-content/55 font-medium">Created</th>
+                  <td className="text-base-content/70">{new Date(device.created_at).toLocaleString()}</td>
                 </tr>
               </tbody>
             </table>
@@ -121,26 +151,26 @@ export default function DeviceDetail() {
 
           {/* Certificate Information for MQTT devices */}
           {device.protocol === 'mqtt' && device.active_certificate && (
-            <div className="mt-6">
-              <h3 className="text-xl font-bold mb-4">Certificate Information</h3>
+            <div className="space-y-3">
+              <h3 className="text-[13px] font-semibold uppercase tracking-wider text-base-content/55">Certificate</h3>
               <div className="overflow-x-auto">
                 <table className="table">
                   <tbody>
                     <tr>
-                      <th className="w-1/3">Certificate ID:</th>
-                      <td><code className="bg-base-200 px-3 py-1 rounded">{device.active_certificate.id}</code></td>
+                      <th className="w-1/3 text-base-content/55 font-medium">Certificate ID</th>
+                      <td><code className="bg-base-200 px-2.5 py-1 rounded-md text-[13px] tnum">{device.active_certificate.id}</code></td>
                     </tr>
                     <tr>
-                      <th>Issued At:</th>
-                      <td>{new Date(device.active_certificate.issued_at).toLocaleString()}</td>
+                      <th className="text-base-content/55 font-medium">Issued</th>
+                      <td className="text-base-content/70">{new Date(device.active_certificate.issued_at).toLocaleString()}</td>
                     </tr>
                     <tr>
-                      <th>Expires At:</th>
-                      <td>{new Date(device.active_certificate.expires_at).toLocaleString()}</td>
+                      <th className="text-base-content/55 font-medium">Expires</th>
+                      <td className="text-base-content/70">{new Date(device.active_certificate.expires_at).toLocaleString()}</td>
                     </tr>
                     <tr>
-                      <th>Days Until Expiry:</th>
-                      <td>
+                      <th className="text-base-content/55 font-medium">Validity</th>
+                      <td className="tnum">
                         <span className={`font-semibold ${
                           device.active_certificate.days_until_expiry < 30 ? 'text-warning' :
                           device.active_certificate.days_until_expiry < 7 ? 'text-error' :
@@ -151,17 +181,11 @@ export default function DeviceDetail() {
                       </td>
                     </tr>
                     <tr>
-                      <th>Status:</th>
+                      <th className="text-base-content/55 font-medium">Status</th>
                       <td>
-                        {device.active_certificate.revoked_at ? (
-                          <div className="badge badge-error">Revoked</div>
-                        ) : device.active_certificate.is_expired ? (
-                          <div className="badge badge-error">Expired</div>
-                        ) : device.active_certificate.is_expiring_soon ? (
-                          <div className="badge badge-warning">Expiring Soon</div>
-                        ) : (
-                          <div className="badge badge-success">Active</div>
-                        )}
+                        <StatusPill tone={certTone(device.active_certificate)}>
+                          {certLabel(device.active_certificate)}
+                        </StatusPill>
                       </td>
                     </tr>
                   </tbody>
@@ -171,20 +195,15 @@ export default function DeviceDetail() {
           )}
 
           {/* Command panel */}
-          <div className="mt-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold">Device Commands</h3>
-              <button className="btn btn-outline btn-primary btn-sm" onClick={() => setCommandOpen(true)}>
-                Send Command
-              </button>
-            </div>
+          <div className="space-y-3">
+            <h3 className="text-[13px] font-semibold uppercase tracking-wider text-base-content/55">Last Command</h3>
             {lastReqId ? (
               <div className="flex items-center gap-3 flex-wrap">
-                <code className="bg-base-200 px-3 py-1 rounded text-sm">{lastReqId}</code>
+                <code className="bg-base-200 px-2.5 py-1 rounded-md text-[13px] tnum">{lastReqId}</code>
                 {commandStatus ? (
-                  <div className={`badge ${commandStateBadgeClass(commandStatus.state)}`}>
+                  <StatusPill tone={commandStateTone(commandStatus.state)} pulse={commandStatus.state === 'requested'}>
                     {commandStatus.state}
-                  </div>
+                  </StatusPill>
                 ) : (
                   <span className="loading loading-spinner loading-sm"></span>
                 )}
@@ -195,23 +214,23 @@ export default function DeviceDetail() {
                 )}
               </div>
             ) : (
-              <p className="text-sm text-base-content/70">No commands sent yet from this view.</p>
+              <p className="text-sm text-base-content/60">No commands sent yet from this view.</p>
             )}
           </div>
 
           {/* Action Buttons */}
-          <div className="card-actions justify-end mt-6">
+          <div className="flex flex-wrap justify-end gap-2 pt-2 border-t border-base-300/60">
             {device.protocol === 'mqtt' && (
               <>
-                <button className="btn btn-outline btn-warning" onClick={() => setRenewOpen(true)}>
+                <button className="btn btn-ghost btn-sm" onClick={() => setRenewOpen(true)}>
                   Renew Certificate
                 </button>
-                <button className="btn btn-outline btn-error" onClick={() => setRevokeOpen(true)}>
+                <button className="btn btn-ghost btn-sm hover:text-error" onClick={() => setRevokeOpen(true)}>
                   Revoke Certificate
                 </button>
               </>
             )}
-            <button className="btn btn-error" onClick={() => setDeleteOpen(true)}>
+            <button className="btn btn-ghost btn-sm hover:text-error" onClick={() => setDeleteOpen(true)}>
               Delete Device
             </button>
           </div>
