@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useLayoutEffect, useCallback } from 'react'
 import GridLayout from 'react-grid-layout'
 import 'react-grid-layout/css/styles.css'
 import { useDashboardConfig } from '../hooks'
@@ -21,29 +21,30 @@ export default function Dashboard() {
 	const [isModalOpen, setIsModalOpen] = useState(false)
 	const [editingWidget, setEditingWidget] = useState<string | null>(null)
 	const [isSaving, setIsSaving] = useState(false)
-	const [gridWidth, setGridWidth] = useState(() => {
-		if (typeof window !== 'undefined') {
-			return window.innerWidth
-		}
-		return GRID_COLUMNS * (ROW_HEIGHT + GRID_MARGIN[0])
-	})
 	const gridContainerRef = useRef<HTMLDivElement>(null)
+	const [gridWidth, setGridWidth] = useState(0)
 
-	// Update grid width on resize
-	useEffect(() => {
-		const updateWidth = () => {
-			if (gridContainerRef.current) {
-				const rect = gridContainerRef.current.getBoundingClientRect()
-				setGridWidth(rect.width)
-			} else if (typeof window !== 'undefined') {
-				setGridWidth(window.innerWidth)
-			}
+	// Measure the grid's own container, not the window:
+	// - window.innerWidth is the wrong number, and it is only replaced after the
+	//   first effect runs, which snapped the grid on every load;
+	// - collapsing the sidebar resizes this element without a window resize,
+	//   which a window listener never saw.
+	// useLayoutEffect + ResizeObserver keeps it correct from first paint.
+	// Re-runs when the grid appears, since the container is unmounted while empty.
+	useLayoutEffect(() => {
+		const element = gridContainerRef.current
+		if (!element) return
+
+		const measure = (): void => {
+			const next = element.getBoundingClientRect().width
+			setGridWidth((prev) => (Math.abs(prev - next) < 1 ? prev : next))
 		}
 
-		updateWidth()
-		window.addEventListener('resize', updateWidth)
-		return () => window.removeEventListener('resize', updateWidth)
-	}, [])
+		measure()
+		const observer = new ResizeObserver(measure)
+		observer.observe(element)
+		return () => observer.disconnect()
+	}, [config.widgets.length])
 
 	const handleLayoutChange = (newLayout: GridLayout.Layout[]) => {
 		// Update widget positions when layout changes
@@ -208,6 +209,7 @@ export default function Dashboard() {
 				/>
 			) : (
 			<div className="w-full" ref={gridContainerRef}>
+				{gridWidth > 0 && (
 				<GridLayout
 					className="layout"
 					layout={layout}
@@ -234,6 +236,7 @@ export default function Dashboard() {
 						</div>
 					))}
 				</GridLayout>
+				)}
 			</div>
 			)}
 
