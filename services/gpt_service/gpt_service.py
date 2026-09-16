@@ -16,11 +16,22 @@ class GPTService:
         self.logger = logging.getLogger(__name__)
 
         if self.provider_name == "openai":
-            self.client = OpenAI(api_key=self.api_key)
+            self.client = None
             self.logger.info(f"Initialized OpenAI GPTService with model {self.model_name}")
         else:
             self.logger.error(f"Unsupported provider: {self.provider_name}")
             raise ValueError(f"Unsupported provider: {self.provider_name}")
+
+    def _get_client(self):
+        """Construct the OpenAI client on first use so the service can boot
+        without credentials; calls fail with a clear error instead."""
+        if self.client is None:
+            if not self.api_key:
+                raise RuntimeError(
+                    "GPT service is not configured: set OPENAI_API_KEY"
+                )
+            self.client = OpenAI(api_key=self.api_key)
+        return self.client
 
     def _get_metric_specific_context(self, metric: str) -> Dict[str, Any]:
         """Get metric-specific optimal ranges and context for environmental monitoring."""
@@ -349,7 +360,7 @@ Keep all text concise: summary under 50 words, each item under 20 words.""",
             self.logger.info(f"Sending analysis request to {self.model_name}")
             
             # Call OpenAI API
-            response = self.client.chat.completions.create(
+            response = self._get_client().chat.completions.create(
                 model=self.model_name,
                 messages=[
                     {
@@ -568,7 +579,7 @@ Always respond with valid JSON only, no markdown formatting."""
 
             self.logger.info(f"Generating {briefing_type} briefing")
             
-            response = self.client.chat.completions.create(
+            response = self._get_client().chat.completions.create(
                 model=self.model_name,
                 messages=[
                     {"role": "system", "content": system_prompt},
