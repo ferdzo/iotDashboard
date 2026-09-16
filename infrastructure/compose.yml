@@ -10,6 +10,9 @@ services:
   
   mosquitto:
     image: eclipse-mosquitto:2.0
+    # Run as UID 1000 so the bind-mounted certs (created by scripts/bootstrap.sh
+    # as the host user) are readable: server.key/ca.key are mode 600.
+    user: "1000:1000"
     ports:
       - "1883:1883"
       - "9001:9001"
@@ -74,6 +77,16 @@ services:
       mqtt-ingestion:
         condition: service_started
     restart: unless-stopped
+
+  migrate:
+    build:
+      context: ../db_migrations
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-example}@timescaledb:5432/${POSTGRES_DB:-iot_data}
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    restart: "no"
 
   backend:
     build:
