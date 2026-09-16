@@ -60,8 +60,15 @@ class TelemetrySerializer(serializers.ModelSerializer):
         fields = ['time', 'device_id', 'device_name', 'metric', 'value', 'unit']
 
     def get_device_name(self, obj):
+        # obj is a Telemetry instance on model querysets, but a plain dict
+        # on .values() querysets (e.g. dashboard overview) — handle both.
+        device_id = getattr(obj, 'device_id', None)
+        if device_id is None and isinstance(obj, dict):
+            device_id = obj.get('device_id')
+        if not device_id:
+            return None
         try:
-            return Device.objects.get(pk=obj.device_id).name
+            return Device.objects.get(pk=device_id).name
         except Device.DoesNotExist:
             return None
 
