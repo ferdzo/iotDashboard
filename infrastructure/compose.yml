@@ -54,6 +54,8 @@ services:
       context: ../services/mqtt_ingestion
     env_file:
       - .env.mqi
+    volumes:
+      - ./mosquitto/certs:/app/certs:z
     depends_on:
       - mosquitto
       - redis
@@ -74,6 +76,9 @@ services:
     restart: unless-stopped
 
   backend:
+    build:
+      context: ..
+      dockerfile: Dockerfile
     image: git.ferdzo.xyz/ferdzo/lyncis/backend:latest
     ports:
       - "3000:3000"
@@ -84,7 +89,8 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-example}
       - POSTGRES_DB=${POSTGRES_DB:-iot_data}
       - DEVICE_MANAGER_URL=http://device-manager:8000
-      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}6                                       
+      - GPT_SERVICE_URL=http://gpt-service:8001
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
       - DEBUG=False
       - ALLOWED_HOSTS=*
     depends_on:
@@ -106,11 +112,12 @@ services:
     ports:
       - "80:80"
     depends_on:
-      - django
+      - backend
     restart: unless-stopped
 
   gpt-service:
-    image: git.ferdzo.xyz/ferdzo/lyncis-gpt-service:latest
+    build:
+      context: ../services/gpt_service
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
     ports:

@@ -6,16 +6,22 @@ Purpose
 Never forget to involve human developers for more complex tasks and decisions. You are encouraged to ask more.
 
 Big Picture
-- Architecture: Device → MQTT (mTLS) → mqtt_ingestion → Redis → db_write → PostgreSQL/TimescaleDB
+- Ingestion: Device → MQTT (mTLS) → mqtt_ingestion → Redis → db_write → PostgreSQL/TimescaleDB
+- Frontend: React → Django BFF (`iotDashboard/`) → device_manager / gpt_service / TimescaleDB / external weather+air APIs
 - Components:
+  - `iotDashboard/` — Django BFF for React frontend (DRF + JWT). Aggregates device_manager, gpt_service, telemetry, weather/air-quality, wellness, calendar, dashboard layouts. Template views disabled.
   - `services/device_manager/` — FastAPI service for device registration, X.509 certificate issuance, and lifecycle management
   - `services/mqtt_ingestion/` — MQTT client that subscribes to device topics and writes to single Redis stream `mqtt:ingestion`
   - `services/db_write/` — Consumer service that reads from Redis streams and writes to database using consumer groups
+  - `services/gpt_service/` — AI daily-briefing + telemetry analysis (OpenAI)
   - `db_migrations/` — Alembic migrations for schema management (SQLAlchemy models)
   - `infrastructure/` — Docker Compose setup (PostgreSQL, Redis, Mosquitto MQTT broker)
-  - `iotDashboard/` — Legacy Django app (being phased out)
+  - `frontend/` — React 19 + Vite dashboard (widgets, drag-and-drop)
 
 Key Files To Read First
+- `iotDashboard/api/views.py` + `iotDashboard/api/urls.py` — BFF surface: devices, telemetry, dashboard/overview, weather, wellness, calendar, dashboard-layouts
+- `iotDashboard/device_manager_client.py` — BFF → device_manager proxy (register/revoke/renew/delete, onboarding token)
+- `iotDashboard/gpt_service_client.py` — BFF → gpt_service proxy (`/daily-briefing`, `/analyze`)
 - `db_migrations/models.py` — SQLAlchemy models: `Device`, `DeviceCertificate`, `Telemetry`. Canonical schema definition.
 - `services/device_manager/app/app.py` — FastAPI endpoints for device registration, certificate management, revocation, renewal.
 - `services/device_manager/app/cert_manager.py` — X.509 certificate generation, CA management, CRL generation.
@@ -24,11 +30,12 @@ Key Files To Read First
 - `services/db_write/src/redis_reader.py` — Consumer group reader for `mqtt:ingestion` stream.
 - `services/db_write/src/db_writer.py` — Batch writes to `telemetry` table using SQLAlchemy.
 - `infrastructure/compose.yml` — Docker services: PostgreSQL/TimescaleDB, Redis, Mosquitto MQTT.
-- `infrastructure/mosquitto/mosquitto.conf` — MQTT broker config with mTLS on port 8883, CRL checking enabled.
+- `infrastructure/mosquitto/config/mosquitto.conf` — MQTT broker config with mTLS on port 8883, CRL checking enabled.
 
 Important Conventions & Patterns
 - **Single stream architecture**: All MQTT data flows through one Redis stream `mqtt:ingestion`. Each message contains `device_id`, `metric`, `value`, `timestamp`.
 - **MQTT topics**: Standard format `devices/{device_id}/{metric}`. Examples: `devices/abc123/temperature`, `devices/xyz789/humidity`.
+- **MQTT/TLS posture**: port 8883 mTLS for all device and ingestion traffic (`MQTT_TLS=true`, `MQTT_CA_CERT=/app/certs/ca.crt`); port 1883 bound to loopback only, never exposed externally.
 - **Certificate IDs**: Use certificate serial number (hex format) as primary key in `device_certificates` table. Multiple certificates per device supported.
 - **Package manager**: All services use `uv` for dependency management (`pyproject.toml` not `requirements.txt`).
 - **Database migrations**: Use Alembic for schema changes. Run migrations from `db_migrations/` directory.
@@ -61,7 +68,7 @@ Integration Points & Gotchas
 - **File permissions**: Mosquitto directories may be owned by UID 1883. Fix with `sudo chown -R $USER:$USER infrastructure/mosquitto/`.
 
 What AI agents should do first
-- **Read architecture first**: Check `README.md` for current architecture. System is microservices-based, not Django monolith.
+- **Read architecture first**: Check `README.md` for current architecture. System is microservices-based with Django as BFF for React, not a Django monolith.
 - **Check database schema**: Always start with `db_migrations/models.py` to understand data model.
 - **Don't change stream names**: Single stream `mqtt:ingestion` is used by mqtt_ingestion and db_write. Changing breaks both services.
 - **Use proper imports**: Services use package structure. Import from `app.*` or `src.*`, not relative imports.

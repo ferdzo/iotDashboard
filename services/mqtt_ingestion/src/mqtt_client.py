@@ -1,4 +1,5 @@
 import logging
+import ssl
 import paho.mqtt.client as mqtt
 from typing import Callable
 from src.config import config
@@ -60,8 +61,16 @@ class MQTTClient:
             logger.info("MQTT client disconnected")
 
     def connect(self):
-        """Connect to MQTT broker"""
+        """Connect to MQTT broker (TLS when MQTT_TLS is set)"""
         try:
+            if config.mqtt.tls:
+                if not config.mqtt.ca_cert:
+                    logger.error("MQTT_TLS is set but MQTT_CA_CERT is missing")
+                    return False
+                self.client.tls_set(
+                    ca_certs=config.mqtt.ca_cert,
+                    tls_version=ssl.PROTOCOL_TLS_CLIENT,
+                )
             self.client.connect(
                 config.mqtt.broker, config.mqtt.port, config.mqtt.keepalive
             )
