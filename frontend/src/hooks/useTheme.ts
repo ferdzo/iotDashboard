@@ -1,9 +1,9 @@
 import { useCallback, useState } from 'react'
 
 /**
- * Single source of truth for the dashboard color theme (task 15).
+ * Single source of truth for the dashboard color theme.
  *
- * - Supported themes: light, dark (+ trim cupcake, corporate) via daisyUI.
+ * - Signature themes: lyncis (dark-first default) + lyncis-light.
  * - Applied as `data-theme` on <html> (document.documentElement).
  * - Persisted in localStorage so it survives reload.
  * - Invalid stored/applied values fall back to DEFAULT_THEME (never blank).
@@ -11,11 +11,11 @@ import { useCallback, useState } from 'react'
 
 export const THEME_STORAGE_KEY = 'iot-dashboard-theme'
 
-export const THEMES = ['light', 'dark', 'cupcake', 'corporate'] as const
+export const THEMES = ['lyncis', 'lyncis-light'] as const
 
 export type ThemeName = (typeof THEMES)[number]
 
-export const DEFAULT_THEME: ThemeName = 'light'
+export const DEFAULT_THEME: ThemeName = 'lyncis'
 
 export function isThemeName(value: unknown): value is ThemeName {
   return (

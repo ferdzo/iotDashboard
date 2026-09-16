@@ -1,16 +1,16 @@
 <!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="lyncis">
   <head>
     <meta charset="UTF-8" />
     <!-- <link rel="icon" type="image/svg+xml" href="/vite.svg" /> -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Lyncis</title>
     <script>
-      // Pre-paint persisted theme (task 15). MUST stay in sync with
+      // Pre-paint persisted theme. MUST stay in sync with
       // THEME_STORAGE_KEY + THEMES in frontend/src/hooks/useTheme.ts.
       try {
         var t = localStorage.getItem('iot-dashboard-theme');
-        if (['light', 'dark', 'cupcake', 'corporate'].indexOf(t) < 0) t = 'light';
+        if (['lyncis', 'lyncis-light'].indexOf(t) < 0) t = 'lyncis';
         document.documentElement.setAttribute('data-theme', t);
       } catch (e) {}
     </script>
