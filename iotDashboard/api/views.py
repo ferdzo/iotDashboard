@@ -1,6 +1,9 @@
 """DRF ViewSets for IoT Dashboard API."""
 
 import requests
+import socket
+import ipaddress
+import logging
 from datetime import timedelta, datetime
 from urllib.parse import urlparse
 from django.utils import timezone
@@ -42,6 +45,47 @@ from .serializers import (
 
 
 device_manager = DeviceManagerClient()
+
+logger = logging.getLogger(__name__)
+
+
+def _reject_unsafe_calendar_url(calendar_url):
+    """Return an error string if the URL must not be fetched server-side, else None.
+
+    Blocks non-http(s) schemes and any host resolving to a private, loopback,
+    link-local, multicast, reserved, or unspecified address (SSRF guard).
+    """
+    try:
+        parsed = urlparse(calendar_url)
+    except ValueError:
+        return "Invalid calendar URL"
+    if parsed.scheme not in ("http", "https"):
+        return "Only http/https calendar URLs are supported"
+    host = parsed.hostname
+    if not host:
+        return "Invalid calendar URL"
+    try:
+        infos = socket.getaddrinfo(
+            host, parsed.port or (443 if parsed.scheme == "https" else 80),
+            type=socket.SOCK_STREAM,
+        )
+    except socket.gaierror:
+        return "Calendar host could not be resolved"
+    for info in infos:
+        try:
+            ip = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            return "Calendar host resolved to an invalid address"
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+        ):
+            return "Calendar URL resolves to a private/internal address"
+    return None
 
 
 class DeviceViewSet(viewsets.ModelViewSet):
@@ -163,6 +207,75 @@ class DeviceViewSet(viewsets.ModelViewSet):
                 status=e.status_code or status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
+    @action(detail=True, methods=['post'], url_path='commands')
+    def send_command(self, request, pk=None):
+        """Send a command to a device via device_manager publish path."""
+        device = self.get_object()
+
+        action = (request.data.get('action') or '').strip()
+        if not action:
+            return Response(
+                {'error': 'action is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        payload = request.data.get('payload', {})
+        if payload is None:
+            payload = {}
+        if not isinstance(payload, dict):
+            return Response(
+                {'error': 'payload must be a JSON object'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            ttl_sec = int(request.data.get('ttl_sec', 300))
+        except (TypeError, ValueError):
+            return Response(
+                {'error': 'ttl_sec must be an integer'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            result = device_manager.send_command(
+                device.id, action, payload, ttl_sec
+            )
+            return Response({
+                'req_id': result.req_id,
+                'device_id': result.device_id,
+                'action': result.action,
+                'state': result.state,
+                'ttl_sec': result.ttl_sec,
+            }, status=status.HTTP_202_ACCEPTED)
+        except DeviceManagerAPIError as e:
+            return Response(
+                {'error': e.message, 'details': e.details},
+                status=e.status_code or status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['get'],
+            url_path=r'commands/(?P<req_id>[^/.]+)')
+    def command_status(self, request, pk=None, req_id=None):
+        """Poll command_log state for a previously sent command (read-only)."""
+        device = self.get_object()
+
+        try:
+            result = device_manager.get_command_status(device.id, req_id)
+            return Response({
+                'req_id': result.req_id,
+                'device_id': result.device_id,
+                'action': result.action,
+                'state': result.state,
+                'ttl_sec': result.ttl_sec,
+                'created_at': result.created_at.isoformat()
+                if result.created_at else None,
+                'acked_at': result.acked_at.isoformat()
+                if result.acked_at else None,
+            })
+        except DeviceManagerAPIError as e:
+            return Response(
+                {'error': e.message, 'details': e.details},
+                status=e.status_code or status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
     @action(detail=True, methods=['get'])
     def credentials(self, request, pk=None):
         """
@@ -340,6 +453,78 @@ class TelemetryViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(time__lte=end_time)
         
         return queryset.order_by('-time')
+
+    def list(self, request, *args, **kwargs):
+        """List telemetry, or bucketed rollups from CAGGs via ?rollup=hour|day."""
+        rollup = request.query_params.get('rollup')
+        if rollup in ('hour', 'day'):
+            return self._rollup_list(request, rollup)
+        if rollup is not None:
+            return Response(
+                {'error': "rollup must be 'hour' or 'day'"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().list(request, *args, **kwargs)
+
+    def _rollup_list(self, request, rollup):
+        """Serve bucketed rows from telemetry_hourly/telemetry_daily."""
+        from django.db import connection
+
+        table = 'telemetry_hourly' if rollup == 'hour' else 'telemetry_daily'
+        where = []
+        params = []
+
+        device_id = request.query_params.get('device_id')
+        if device_id:
+            where.append('c.device_id = %s')
+            params.append(device_id)
+
+        metric = request.query_params.get('metric')
+        if metric:
+            where.append('c.metric = %s')
+            params.append(metric)
+
+        hours = request.query_params.get('hours')
+        if hours:
+            try:
+                hours_int = int(hours)
+            except (ValueError, TypeError):
+                return Response(
+                    {'error': 'hours must be an integer'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            where.append("c.bucket >= now() - make_interval(hours => %s)")
+            params.append(hours_int)
+
+        start_time = request.query_params.get('start_time')
+        if start_time:
+            where.append('c.bucket >= %s')
+            params.append(start_time)
+
+        end_time = request.query_params.get('end_time')
+        if end_time:
+            where.append('c.bucket <= %s')
+            params.append(end_time)
+
+        sql = (
+            'SELECT c.bucket AS time, c.device_id, d.name AS device_name, '
+            'c.metric, c.avg_value AS value, NULL AS unit, '
+            'c.min_value, c.max_value, c.sample_count '
+            f'FROM {table} c LEFT JOIN devices d ON d.id = c.device_id'
+        )
+        if where:
+            sql += ' WHERE ' + ' AND '.join(where)
+        sql += ' ORDER BY time DESC'
+
+        with connection.cursor() as cur:
+            cur.execute(sql, params)
+            cols = [c[0] for c in cur.description]
+            rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+
+        page = self.paginate_queryset(rows)
+        if page is not None:
+            return self.get_paginated_response(page)
+        return Response(rows)
     
     @action(detail=False, methods=['get'])
     def latest(self, request):
@@ -364,6 +549,10 @@ class TelemetryViewSet(viewsets.ReadOnlyModelViewSet):
             telemetry.append(record)
         
         serializer = self.get_serializer(telemetry, many=True)
+        page = self.paginate_queryset(telemetry)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'])
@@ -625,6 +814,13 @@ class CalendarViewSet(viewsets.ViewSet):
         if parsed.scheme not in ('http', 'https'):
             return Response(
                 {'error': 'Only http/https calendar URLs are supported'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        url_error = _reject_unsafe_calendar_url(calendar_url)
+        if url_error:
+            return Response(
+                {'error': url_error},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -982,7 +1178,7 @@ class WellnessViewSet(viewsets.ViewSet):
                 outdoor_data['weather'] = weather.get('weather_description')
                 outdoor_data['wind_speed'] = weather.get('wind_speed')
             except Exception as e:
-                self.logger.warning(f"Failed to fetch weather: {e}") if hasattr(self, 'logger') else None
+                logger.warning(f"Failed to fetch weather: {e}")
             
             try:
                 raw_aq = weather_client.get_air_quality(city.lower())
@@ -1019,6 +1215,12 @@ class WellnessViewSet(viewsets.ViewSet):
             # Parse calendar events if URL provided
             calendar_events = None
             if calendar_url:
+                url_error = _reject_unsafe_calendar_url(calendar_url)
+                if url_error:
+                    return Response(
+                        {'error': url_error},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
                 try:
                     cal_response = requests.get(calendar_url, timeout=10)
                     cal_response.raise_for_status()
@@ -1132,7 +1334,7 @@ class DashboardLayoutViewSet(viewsets.ModelViewSet):
     """ViewSet for managing dashboard layouts (single-user system)."""
     
     serializer_class = DashboardLayoutSerializer
-    permission_classes = [permissions.AllowAny]  # No auth required for single-user system
+    permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
         """Return all layouts (single-user system)."""

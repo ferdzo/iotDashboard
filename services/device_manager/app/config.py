@@ -29,5 +29,16 @@ class Config:
     SERVICE_PORT = int(os.getenv("DEVICE_MANAGER_PORT", "8000"))
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
+    # MQTT command-publish settings (BFF actuation path, todo 7).
+    # Uses a dedicated command client identity (MQTT_COMMAND_CERT/KEY),
+    # separate from the ingestion identity, following the tls_set pattern
+    # in services/mqtt_ingestion/src/mqtt_client.py.
+    MQTT_BROKER = os.getenv("MQTT_BROKER", "localhost")
+    MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
+    MQTT_TLS = os.getenv("MQTT_TLS", "False").lower() in ("1", "true", "yes")
+    MQTT_CA_CERT = os.getenv("MQTT_CA_CERT")
+    MQTT_COMMAND_CERT = os.getenv("MQTT_COMMAND_CERT")
+    MQTT_COMMAND_KEY = os.getenv("MQTT_COMMAND_KEY")
+
 
 config = Config()

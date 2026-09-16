@@ -72,11 +72,15 @@ The frontend connects to the Django API. Configure the API URL in `vite.config.t
 ```typescript
 proxy: {
   '/api': {
-    target: 'http://localhost:8000',
+    target: 'http://localhost:3000',
     changeOrigin: true,
   },
 }
 ```
+
+The dev proxy targets the compose `backend` service (`localhost:3000`).
+To run Django locally instead (`python manage.py runserver`, default port
+8000), point the proxy target at `http://localhost:8000`.
 
 ## Building for Production
 

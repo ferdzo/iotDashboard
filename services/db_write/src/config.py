@@ -31,7 +31,6 @@ class DatabaseConfig:
     name: Optional[str] = None
     user: Optional[str] = None
     password: Optional[str] = None
-    table_name: str = "sensor_readings"
     enable_timescale: bool = False
 
     def get_connection_string(self) -> str:
@@ -59,12 +58,10 @@ class ConsumerConfig:
 
 @dataclass
 class StreamConfig:
-    """Redis stream configuration"""
+    """Redis stream configuration (single stream mqtt:ingestion, DLQ mqtt:dlq)"""
 
-    pattern: str = "mqtt_stream:*"
-    dead_letter_stream: str = "mqtt_stream:failed"
     max_retries: int = 3
-    trim_maxlen: int = 10000  # Keep last N messages in each stream
+    trim_maxlen: int = 10000  # Cap for the mqtt:dlq stream
 
 
 @dataclass
@@ -93,7 +90,6 @@ class Config:
             name=os.getenv("DB_NAME", None),
             user=os.getenv("DB_USER", None),
             password=os.getenv("DB_PASSWORD", None),
-            table_name=os.getenv("TABLE_NAME", "sensor_readings"),
             enable_timescale=os.getenv("ENABLE_TIMESCALE", "false").lower() == "true",
         )
 

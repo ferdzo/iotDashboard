@@ -1,0 +1,89 @@
+=== TASK 4 BASELINE (unchanged code) ===
+branch: develop
+head: e3c0380
+--- 1. no http_ingress sibling module ---
+config.py
+mqtt_client.py
+__pycache__
+redis_writer.py
+registry.py
+ModuleNotFoundError: No module named 'src'
+--- 2. no /ingest route in mqtt_ingestion ---
+NO-MATCH: no /ingest endpoint in mqtt_ingestion
+--- 3. device_manager register rejects http (code gate) ---
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Protocol '{request.protocol}' not yet implemented. Only 'mqtt' is supported.",
+            )
+--- 4. precise baseline ---
+import src.http_ingress (sys python): ModuleNotFoundError: No module named 'src.http_ingress'
+import src.http_ingress (service venv): ModuleNotFoundError: No module named 'src.http_ingress'
+curl POST localhost:8080/ingest -> 404 from unrelated listener (something else occupies 8080); QA will use port 8099
+--- 5. baseline corroboration (2026-09-15, implementer re-check) ---
+git show HEAD:services/mqtt_ingestion/main.py | grep http_ingress|/ingest|start_http_server|HTTPConfig -> NO-MATCH
+git ls-tree HEAD services/mqtt_ingestion/src/ -> config.py mqtt_client.py redis_writer.py registry.py (no http_ingress.py)
+git show HEAD:services/mqtt_ingestion/src/config.py | grep HTTP -> NO-MATCH
+git show HEAD:services/device_manager/app/app.py gate -> only 'mqtt' branch; else 400 'not yet implemented'
+conclusion: POST /ingest does not exist on unchanged code; http/webhook register rejected. BASELINE HOLDS.
+
+=== TASK 4 IMPLEMENT ===
+files:
+  new: services/mqtt_ingestion/src/http_ingress.py (FastAPI sibling: POST /ingest {device_id,metric,value},
+       Bearer/X-API-Key auth vs SHA-256 device_credentials.credential_hash, reuses (device_id,metric,value)
+       handler contract; 401 no-write on bad/missing cred, 403 on unknown/inactive, 422 on empty/non-finite)
+  mod: services/mqtt_ingestion/main.py (start_http_server thread in same process + wiring to
+       _handle_sensor_data with registry-backed http/webhook validator + redis_writer.flush hook; bind
+       failure logs and keeps MQTT loop; stop() signals uvicorn)
+  mod: services/mqtt_ingestion/src/config.py (HTTPConfig: HTTP_INGRESS_ENABLED/HOST/PORT)
+  mod: services/mqtt_ingestion/pyproject.toml + uv.lock (add fastapi, uvicorn only)
+  mod: services/device_manager/app/app.py (register branch http/webhook: raw secret once, SHA-256 digest
+       into device_credentials as api_key/webhook_secret; mqtt branch byte-identical)
+untouched (MQTT path): services/mqtt_ingestion/src/mqtt_client.py, redis_writer.py, registry.py (git diff --quiet clean)
+
+=== TASK 4 VERIFY (live, 2026-09-15; redis=docker infrastructure-redis-1, pg=localhost:5432/iot_data) ===
+harness: /tmp/opencode/task4/{reg_devices,run_http,mqtt_inject}.py (removed after run; receipt below)
+note: prod CA key unreadable by QA user (0600 mosquitto); used throwaway openssl CA in /tmp for
+  device_manager import only. mqtt test cert signed by throwaway CA; only DB rows matter for QA.
+
+1. register end-to-end (device_manager TestClient, exit 0):
+   POST /devices/register {name:t4http-s155752, protocol:http} -> 200 device_id=we5n4q0m credential_id=e98ff195... api_key=<43ch, REDACTED-after-revoke>
+   POST /devices/register {name:t4webhook-s155752, protocol:webhook} -> 200 device_id=06aprb39 webhook_secret=<43ch, REDACTED-after-revoke>
+   POST /devices/register {name:t4mqtt-s155752, protocol:mqtt} -> 200 device_id=fti81pze cert issued
+   GET /devices/fti81pze -> 200 (mqtt path intact)
+2. HTTP sibling up: uvicorn 127.0.0.1:8099, registry loaded 6 active devices; GET /health -> 200 (curl exit 0)
+3. MQTT reference path (REAL MQTTClient._on_message, registry validator, REAL _handle_sensor_data):
+   inject devices/fti81pze/temperature=23.5 -> XLEN 4->5
+4. HTTP valid POST (exit 0, http 200):
+   curl POST /ingest Authorization:Bearer <http-key> {we5n4q0m,temperature,23.5} -> {"status":"ok",...} http_code=200; XLEN 5->6
+5. FIELD COMPARISON (redis-cli XRANGE mqtt:ingestion):
+   mqtt entry:  {device_id:fti81pze, metric:temperature, value:23.5, timestamp:2026-09-15T21:08:23.043656}
+   http entry:  {device_id:we5n4q0m, metric:temperature, value:23.5, timestamp:2026-09-15T21:08:23.158488}
+   => field-name sets identical {device_id,metric,value,timestamp}; value encoding identical ("23.5" str).
+      device_id/timestamp differ by design. FIELD-IDENTICAL CONFIRMED.
+6. failure probes (all curl exit 0; stream growth ZERO):
+   bad Bearer -> 401 {"detail":"Invalid credentials"}; missing cred -> 401 {"detail":"Missing credentials"};
+   mqtt-protocol device_id over HTTP with foreign key -> 401 (protocol gate: d.protocol IN http/webhook);
+   XLEN 7->7 across all three 401s (measured BEFORE=7 AFTER=7).
+   empty device_id/metric -> 422 validation (zero growth, XLEN stayed 6 in that round).
+7. alias header: X-API-Key valid POST {we5n4q0m,humidity,55} -> 200; webhook secret POST {06aprb39,co2,800} -> 200; XLEN 7->8.
+8. validator unit (403-path logic, exit 0): http/webhook accept, unknown + mqtt-only reject -> ok.
+
+=== MANUAL-QA ARTIFACT (binary observables) ===
+curl health: http_code=200 exit=0 | valid POST: http_code=200 exit=0 | bad/no cred: http_code=401 exit=0
+mqtt-dev-over-http: http_code=401 exit=0 | empty fields: http_code=422 exit=0 | revoked key: http_code=401 exit=0
+redis-cli (docker exec infrastructure-redis-1): PONG; XLEN 4->5 (mqtt) ->6 (http) ->7 (x-api-key) ->8 (webhook);
+  401 rounds 7->7 and 8->8 (zero growth). XRANGE field dump above.
+
+=== CLEANUP RECEIPT ===
+revoked: DELETE FROM devices WHERE id IN (we5n4q0m,06aprb39,fti81pze) -> 1 row each; leftover creds=0, leftover devices=0.
+  post-revoke POST with old http key -> 401, XLEN 8->8 (logged secrets are dead; none stored in repo).
+processes: run_http.py server pkill'd; port 8099 health -> http_code=000 curl_exit=7 (down).
+scratch: /tmp/opencode/task4/{reg_devices,run_http,mqtt_inject}.py + devices.json + tca/ removed (rm -rf below).
+repo: no new deployable service (same-process thread); no .env/secrets committed.
+
+=== RISKS ===
+- HTTP listener port defaults 8080 (occupied on this host); ops must set HTTP_INGRESS_PORT. Bind failure is
+  fail-safe (MQTT loop continues) but silent-ish (single error log) — watch for it in prod logs.
+- Credential lookup is per-request psycopg2 (no cache/TTL) — fine at webhook rates, not for high-frequency polling.
+- No rate limiting on /ingest (explicit Phase-3 scope); exposed port must sit behind firewall/auth proxy in prod.

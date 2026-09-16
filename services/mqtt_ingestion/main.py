@@ -1,8 +1,15 @@
+import asyncio
 import logging
 import signal
 import sys
+import threading
+import time
 from src.mqtt_client import MQTTClient
 from src.redis_writer import RedisWriter
+from src.config import config
+from src.registry import DeviceRegistry
+from src.ack_listener import create_ack_listener
+from src.expiry_sweep import create_expiry_sweep
 
 logging.basicConfig(
     level=getattr(logging, "INFO"),
@@ -16,6 +23,11 @@ class MQTTIngestionService:
         self.running = False
         self.redis_writer = None
         self.mqtt_client = None
+        self.registry = None
+        self.ack_listener = None
+        self.expiry_sweep = None
+        self.http_server = None
+        self.http_thread = None
 
         signal.signal(signal.SIGTERM, self._signal_handler)
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -36,6 +48,97 @@ class MQTTIngestionService:
         else:
             logger.error(f"Failed to process {device_id}/{sensor_type}: {value}")
 
+    def start_ack_listener(self):
+        """Start the device ack subscriber (same process as the sweep).
+
+        Shares the broker connection config and DB URL with the expiry
+        sweep (todo 9 seam: ``create_expiry_sweep``); owns its own
+        ``devices/+/status`` subscription so telemetry is untouched. A
+        start failure is logged and does NOT stop the MQTT/telemetry loop.
+        """
+        try:
+            self.ack_listener = create_ack_listener(config.database.url or "")
+            self.ack_listener.start()
+        except Exception as e:
+            logger.error(f"Device ack listener failed to start: {e}")
+            self.ack_listener = None
+
+    def start_expiry_sweep(self):
+        """Start the command expiry sweep (60s loop, same process).
+
+        Shares the process with the ack listener (todo 8 module,
+        started alongside via ``start_ack_listener``). A start
+        failure is logged and does NOT stop the MQTT/telemetry loop.
+        """
+        try:
+            self.expiry_sweep = create_expiry_sweep(config.database.url or "")
+            self.expiry_sweep.start()
+        except Exception as e:
+            logger.error(f"Command expiry sweep failed to start: {e}")
+            self.expiry_sweep = None
+
+    def start_http_server(self):
+        """Start the HTTP ingress sibling (same process, no new service).
+
+        Serves POST /ingest reusing _handle_sensor_data so HTTP entries
+        land in mqtt:ingestion field-identical to the MQTT path. A bind
+        failure is logged and does NOT stop the MQTT loop.
+        """
+        if not config.http.enabled:
+            logger.info("HTTP ingress disabled (HTTP_INGRESS_ENABLED=0)")
+            return True
+        try:
+            import uvicorn
+
+            from src.http_ingress import create_http_app, http_device_validator
+        except ImportError as e:
+            logger.error(f"HTTP ingress unavailable (missing dependency): {e}")
+            return False
+
+        registry = self.registry
+        if registry is not None:
+            validator = lambda device_id: http_device_validator(  # noqa: E731
+                device_id, registry.is_known
+            )
+        else:
+            validator = None
+
+        app = create_http_app(
+            self._handle_sensor_data,
+            device_validator=validator,
+            on_ingested=self.redis_writer.flush,
+        )
+        server = uvicorn.Server(
+            uvicorn.Config(
+                app,
+                host=config.http.host,
+                port=config.http.port,
+                log_level="warning",
+            )
+        )
+        thread = threading.Thread(
+            target=asyncio.run, args=(server.serve(),), daemon=True
+        )
+        thread.start()
+        for _ in range(50):
+            if getattr(server, "started", False):
+                break
+            time.sleep(0.1)
+        if not getattr(server, "started", False):
+            logger.error(
+                f"HTTP ingress failed to bind "
+                f"{config.http.host}:{config.http.port}; "
+                "continuing with MQTT only"
+            )
+            server.should_exit = True
+            return False
+        self.http_server = server
+        self.http_thread = thread
+        logger.info(
+            f"HTTP ingress listening on {config.http.host}:{config.http.port}"
+        )
+        return True
+
     def start(self):
         """Start the service"""
         logger.info("Starting MQTT Ingestion Service...")
@@ -43,11 +146,22 @@ class MQTTIngestionService:
         try:
             self.redis_writer = RedisWriter()
 
-            self.mqtt_client = MQTTClient(self._handle_sensor_data)
+            self.registry = DeviceRegistry(database_url=config.database.url)
+
+            self.mqtt_client = MQTTClient(
+                self._handle_sensor_data,
+                device_validator=self.registry.is_known,
+            )
 
             if not self.mqtt_client.connect():
                 logger.error("Failed to connect to MQTT, exiting")
                 return False
+
+            self.start_ack_listener()
+
+            self.start_expiry_sweep()
+
+            self.start_http_server()
 
             self.running = True
             logger.info("Service started successfully")
@@ -67,6 +181,15 @@ class MQTTIngestionService:
 
         logger.info("Stopping service...")
         self.running = False
+
+        if self.http_server:
+            self.http_server.should_exit = True
+
+        if self.expiry_sweep:
+            self.expiry_sweep.stop()
+
+        if self.ack_listener:
+            self.ack_listener.stop()
 
         if self.mqtt_client:
             self.mqtt_client.stop()

@@ -22,7 +22,6 @@ export const widgetRegistry: Record<WidgetType, ComponentType<WidgetProps>> = {
   'stat': StatWidget,
   'gauge': GaugeWidget,
   'ai-insight': AiInsightWidget,
-  'bar-chart': LineChartWidget, 
   'air-quality': AirQualityWidget,
   'weather': WeatherWidget,
   'comfort-index': ComfortIndexWidget,

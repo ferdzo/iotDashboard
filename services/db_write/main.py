@@ -97,6 +97,34 @@ class DatabaseWriterService:
             self.logger.error(f"Service startup failed: {e}", exc_info=True)
             return False
 
+    def _dead_letter(self, messages: List[StreamMessage], reason: str) -> int:
+        """Copy failed messages to the mqtt:dlq stream. Returns count stored.
+
+        Callers must still acknowledge the originals so the consumer group
+        advances; the DLQ preserves the payloads for triage instead of
+        dropping them silently.
+        """
+        stored = 0
+        for msg in messages:
+            try:
+                self.redis_reader.redis_client.xadd(
+                    "mqtt:dlq",
+                    {
+                        "stream_key": msg.stream_key,
+                        "message_id": msg.message_id,
+                        "device_id": msg.device_id,
+                        "metric": msg.sensor_type,
+                        "value": str(msg.value),
+                        "timestamp": msg.timestamp,
+                        "reason": reason,
+                    },
+                    maxlen=config.stream.trim_maxlen,
+                )
+                stored += 1
+            except Exception as e:
+                self.logger.error(f"Failed to dead-letter {msg.message_id}: {e}")
+        return stored
+
     def _processing_loop(self):
         """Main processing loop"""
         consecutive_errors = 0
@@ -115,17 +143,40 @@ class DatabaseWriterService:
                 self.stats["messages_read"] += len(messages)
                 self.logger.debug(f"Read {len(messages)} messages from Redis")
 
-                # Transform messages to sensor readings
-                readings = self._transform_messages(messages)
+                # Transform messages to sensor readings, splitting out
+                # per-message validation failures for the dead-letter stream
+                readings, valid_messages, failed_messages = self._transform_messages(
+                    messages
+                )
+
+                if failed_messages:
+                    # Out-of-range / invalid payloads never drop silently:
+                    # reuse the Phase-1 DLQ path with a validation reason.
+                    self._dead_letter(failed_messages, reason="validation-failed")
 
                 if not readings:
                     self.logger.warning("No valid readings after transformation")
-                    # Acknowledge the messages anyway (they were invalid)
+                    # Invalid messages can never succeed: dead-lettered above,
+                    # now ack so the consumer group advances
                     self.redis_reader.acknowledge_batch(messages)
                     continue
 
-                # Write to database
-                success = self.db_writer.write_batch(readings)
+                # Write to database with retries (fail-closed: never ack
+                # unprocessed work; exhausted batches go to the dead-letter
+                # stream instead of being silently dropped)
+                success = False
+                attempts = 1 + config.stream.max_retries
+                for attempt in range(1, attempts + 1):
+                    if self.db_writer.write_batch(readings):
+                        success = True
+                        break
+                    if attempt < attempts:
+                        backoff = min(2 ** attempt, 30)
+                        self.logger.warning(
+                            f"Write failed (attempt {attempt}/{attempts}), "
+                            f"retrying in {backoff}s"
+                        )
+                        time.sleep(backoff)
 
                 if success:
                     # Successfully written, acknowledge the messages
@@ -139,11 +190,15 @@ class DatabaseWriterService:
                         f"{ack_count} messages acknowledged"
                     )
                 else:
-                    # Write failed, log error and acknowledge to prevent blocking
+                    # Retries exhausted: dead-letter + ack so the queue advances
+                    # without losing the payloads (only the transformed subset;
+                    # validation failures were already dead-lettered above)
                     self.logger.error(
-                        f"Failed to write batch of {len(readings)} readings"
+                        f"Failed to write batch of {len(readings)} readings "
+                        f"after {1 + config.stream.max_retries} attempts; "
+                        "moving to dead-letter stream"
                     )
-                    # Acknowledge anyway so they don't block the queue
+                    self._dead_letter(valid_messages, reason="db-write-failed")
                     self.redis_reader.acknowledge_batch(messages)
                     self.stats["messages_failed"] += len(messages)
                     self.stats["errors"] += 1
@@ -175,20 +230,28 @@ class DatabaseWriterService:
 
     def _transform_messages(
         self, messages: List[StreamMessage]
-    ) -> List[TelemetryReading]:
-        """Transform stream messages to sensor readings"""
+    ) -> tuple:
+        """Transform stream messages to sensor readings.
+
+        Returns (readings, valid_messages, failed_messages) so callers can
+        dead-letter per-message validation failures instead of dropping them.
+        """
         readings = []
+        valid_messages = []
+        failed_messages = []
 
         for msg in messages:
             reading = self.schema_handler.transform_message(msg)
             if reading:
                 readings.append(reading)
+                valid_messages.append(msg)
             else:
+                failed_messages.append(msg)
                 self.logger.warning(
                     f"Failed to transform message {msg.message_id} from {msg.stream_key}"
                 )
 
-        return readings
+        return readings, valid_messages, failed_messages
 
     def stop(self):
         """Stop the service gracefully"""
@@ -246,7 +309,7 @@ def main():
     logger.info(f"Consumer Group: {config.consumer.group_name}")
     logger.info(f"Consumer Name: {config.consumer.consumer_name}")
     logger.info(f"Batch Size: {config.consumer.batch_size}")
-    logger.info(f"Stream Pattern: {config.stream.pattern}")
+    logger.info("Dead-letter stream: mqtt:dlq")
     logger.info("=" * 60)
 
     service = DatabaseWriterService()

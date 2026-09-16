@@ -48,3 +48,33 @@ class DeviceCredentials(BaseModel):
     certificate_pem: bytes
     private_key_pem: bytes
     expires_at: datetime.datetime
+
+
+class CommandRequest(BaseModel):
+    """BFF command call body: action + optional payload + TTL override."""
+
+    action: str
+    payload: dict[str, Any] | None = None
+    ttl_sec: int = 300
+
+
+class CommandResponse(BaseModel):
+    """BFF command call result: req_id tracks the command end to end."""
+
+    req_id: str
+    device_id: str
+    action: str
+    state: str
+    ttl_sec: int
+
+
+class CommandStatus(BaseModel):
+    """Read-only command tracking record (todo 10 status polling)."""
+
+    req_id: str
+    device_id: str
+    action: str
+    state: str
+    ttl_sec: int
+    created_at: datetime.datetime | None = None
+    acked_at: datetime.datetime | None = None

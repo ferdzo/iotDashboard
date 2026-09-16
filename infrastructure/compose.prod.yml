@@ -63,6 +63,9 @@ services:
       - MQTT_PASSWORD=${MQTT_PASSWORD:-}
       - MQTT_TLS=true
       - MQTT_CA_CERT=/app/certs/ca.crt
+      - MQTT_CLIENT_CERT=/app/certs/ingestion.crt
+      - MQTT_CLIENT_KEY=/app/certs/ingestion.key
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-example}@timescaledb:5432/${POSTGRES_DB:-iot_data}
     volumes:
       - ./mosquitto/certs:/app/certs:z
     depends_on:
@@ -81,7 +84,6 @@ services:
       - CONSUMER_NAME=worker-01
       - BATCH_SIZE=100
       - BATCH_TIMEOUT_SEC=5
-      - STREAM_PATTERN=mqtt_stream:*
     depends_on:
       timescaledb:
         condition: service_healthy

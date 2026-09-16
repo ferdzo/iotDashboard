@@ -52,10 +52,18 @@ class DeviceCreateSerializer(serializers.Serializer):
 
 class TelemetrySerializer(serializers.ModelSerializer):
     """Serializer for telemetry data."""
-    
+
+    device_name = serializers.SerializerMethodField()
+
     class Meta:
         model = Telemetry
-        fields = ['time', 'device_id', 'metric', 'value', 'unit']
+        fields = ['time', 'device_id', 'device_name', 'metric', 'value', 'unit']
+
+    def get_device_name(self, obj):
+        try:
+            return Device.objects.get(pk=obj.device_id).name
+        except Device.DoesNotExist:
+            return None
 
 
 class DeviceMetricsSerializer(serializers.Serializer):

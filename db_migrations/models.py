@@ -8,7 +8,7 @@ To modify schema:
 4. Run: alembic upgrade head
 """
 
-from sqlalchemy import Boolean, Column, Float, ForeignKey, Index, Text, DateTime, JSON
+from sqlalchemy import Boolean, Column, Float, ForeignKey, Index, Integer, Text, DateTime, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 
@@ -139,3 +139,29 @@ class User(Base):
 
     def __repr__(self):
         return f"<User(username={self.username}, email={self.email})>"
+
+
+class CommandLog(Base):
+    """Device command audit trail (requested → acked/expired/failed)."""
+
+    __tablename__ = "command_log"
+
+    id = Column(Text, primary_key=True)
+    device_id = Column(
+        Text, ForeignKey("devices.id", ondelete="CASCADE"), nullable=False
+    )
+    action = Column(Text, nullable=False)
+    payload = Column(JSON)
+    req_id = Column(Text, unique=True, nullable=False)
+    state = Column(Text, nullable=False, default="requested")
+    ttl_sec = Column(Integer, nullable=False, default=300)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    acked_at = Column(DateTime(timezone=True))
+
+    __table_args__ = (
+        Index("idx_command_log_device_id", "device_id"),
+        Index("idx_command_log_state", "state"),
+    )
+
+    def __repr__(self):
+        return f"<CommandLog(req_id={self.req_id}, device={self.device_id}, state={self.state})>"

@@ -1,5 +1,12 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { apiClient } from '../lib/api-client'
+import {
+  applyAuthHeader,
+  clearSession,
+  getAccessToken,
+  setSession,
+  subscribeSession,
+} from '../lib/auth-session'
 
 interface AuthContextType {
   isAuthenticated: boolean
@@ -9,30 +16,32 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+// Thin consumer of the session module: all storage/header/refresh logic
+// lives in lib/auth-session. This component only mirrors isAuthenticated
+// state (subscribed, so interceptor-driven refresh/clear stays in sync)
+// and performs the login/logout calls.
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(
-    () => localStorage.getItem('access_token')
-  )
+  const [token, setToken] = useState<string | null>(() => getAccessToken())
 
   useEffect(() => {
-    if (token) {
-      apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`
-    } else {
-      delete apiClient.defaults.headers.common['Authorization']
-    }
-  }, [token])
+    applyAuthHeader(apiClient)
+    return subscribeSession(() => {
+      setToken(getAccessToken())
+      applyAuthHeader(apiClient)
+    })
+  }, [])
 
   const login = async (username: string, password: string) => {
     const response = await apiClient.post('/auth/login/', { username, password })
     const { access, refresh } = response.data
-    localStorage.setItem('access_token', access)
-    localStorage.setItem('refresh_token', refresh)
+    setSession(access, refresh)
+    applyAuthHeader(apiClient)
     setToken(access)
   }
 
   const logout = () => {
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('refresh_token')
+    clearSession()
+    applyAuthHeader(apiClient)
     setToken(null)
   }
 

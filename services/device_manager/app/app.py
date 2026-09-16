@@ -1,4 +1,5 @@
 import datetime
+import hashlib
 import logging
 import secrets
 
@@ -7,13 +8,23 @@ from fastapi import FastAPI, HTTPException, Query
 
 from app.cert_manager import CertificateManager
 from app.database import get_db_context
-from app.db_models import Device, DeviceCertificate, DeviceOnboardingToken
+from app.db_models import (
+    CommandLog,
+    Device,
+    DeviceCertificate,
+    DeviceCredential,
+    DeviceOnboardingToken,
+)
 from app.models import (
+    CommandRequest,
+    CommandResponse,
+    CommandStatus,
     DeviceCertificateResponse,
     DeviceRegistrationRequest,
     DeviceRegistrationResponse,
     DeviceResponse,
 )
+from app.mqtt_publisher import publish_command
 
 logger = logging.getLogger(__name__)
 
@@ -88,10 +99,55 @@ async def register_device(
                 onboarding_token=onboarding_token,
             )
 
+        elif request.protocol in ("http", "webhook"):
+            # HTTP/webhook devices: issue a raw secret once, store only its
+            # SHA-256 digest in device_credentials (verified by the
+            # mqtt_ingestion HTTP ingress sibling).
+            raw_secret = secrets.token_urlsafe(32)
+            digest = hashlib.sha256(raw_secret.encode("utf-8")).hexdigest()
+            device_id = cert_manager.generate_device_id()
+            credential_id = secrets.token_hex(12)
+            credential_type = (
+                "api_key" if request.protocol == "http" else "webhook_secret"
+            )
+
+            with get_db_context() as db:
+                device = Device(
+                    id=device_id,
+                    name=request.name,
+                    location=request.location,
+                    protocol=request.protocol,
+                    connection_config=request.connection_config,
+                    is_active=True,
+                    created_at=datetime.datetime.now(datetime.UTC),
+                )
+                db.add(device)
+
+                credential = DeviceCredential(
+                    id=credential_id,
+                    device_id=device_id,
+                    credential_type=credential_type,
+                    credential_hash=digest,
+                    created_at=datetime.datetime.now(datetime.UTC),
+                )
+                db.add(credential)
+                db.commit()
+
+            return DeviceRegistrationResponse(
+                device_id=device_id,
+                protocol=request.protocol,
+                credential_id=credential_id,
+                api_key=raw_secret if request.protocol == "http" else None,
+                webhook_secret=raw_secret
+                if request.protocol == "webhook"
+                else None,
+            )
+
         else:
             raise HTTPException(
                 status_code=400,
-                detail=f"Protocol '{request.protocol}' not yet implemented. Only 'mqtt' is supported.",
+                detail=f"Protocol '{request.protocol}' not supported. "
+                "Supported: 'mqtt', 'http', 'webhook'.",
             )
 
     except HTTPException:
@@ -170,6 +226,137 @@ async def get_device_credentials(device_id: str, token: str = Query(...)) -> Dev
         logger.error(f"Failed to fetch credentials for device {device_id}: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500, detail="Failed to fetch device credentials"
+        ) from e
+
+
+@app.post("/devices/{device_id}/commands")
+async def send_device_command(
+    device_id: str, request: CommandRequest
+) -> CommandResponse:
+    """
+    Send a command to a device (BFF actuation path).
+
+    Publishes QoS1 (never retained) to devices/{id}/commands/{action} with
+    req_id + expiry in the payload via the dedicated mTLS command identity,
+    and records a command_log row in requested state.
+    Unknown devices → 404 with no publish and no row.
+    """
+    action = (request.action or "").strip()
+    if not action or "/" in action or "+" in action or "#" in action:
+        raise HTTPException(
+            status_code=422, detail="Action must be a non-empty single topic level"
+        )
+    if request.ttl_sec < 1 or request.ttl_sec > 86400:
+        raise HTTPException(
+            status_code=422, detail="ttl_sec must be between 1 and 86400"
+        )
+
+    try:
+        with get_db_context() as db:
+            device = db.query(Device).filter(Device.id == device_id).first()
+            if not device:
+                raise HTTPException(status_code=404, detail="Device not found")
+
+        req_id = secrets.token_hex(16)
+        now = datetime.datetime.now(datetime.UTC)
+        expires_at = now + datetime.timedelta(seconds=request.ttl_sec)
+        message = {
+            "req_id": req_id,
+            "device_id": device_id,
+            "action": action,
+            "payload": request.payload or {},
+            "ttl_sec": request.ttl_sec,
+            "expires_at": expires_at.isoformat(),
+        }
+
+        try:
+            publish_command(device_id, action, message)
+        except RuntimeError as e:
+            logger.error(f"Command publish failed for device {device_id}: {e}")
+            raise HTTPException(
+                status_code=502, detail="Failed to publish command to broker"
+            ) from e
+
+        try:
+            with get_db_context() as db:
+                db.add(
+                    CommandLog(
+                        id=secrets.token_hex(12),
+                        device_id=device_id,
+                        action=action,
+                        payload=request.payload or {},
+                        req_id=req_id,
+                        state="requested",
+                        ttl_sec=request.ttl_sec,
+                    )
+                )
+        except Exception as e:
+            logger.error(
+                f"Command {req_id} published but command_log write failed: {e}",
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=500, detail="Command sent but tracking write failed"
+            ) from e
+
+        logger.info(f"Command {req_id} ({action}) sent to device {device_id}")
+        return CommandResponse(
+            req_id=req_id,
+            device_id=device_id,
+            action=action,
+            state="requested",
+            ttl_sec=request.ttl_sec,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to send command to device {device_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to send command.") from e
+
+
+@app.get("/devices/{device_id}/commands/{req_id}")
+async def get_device_command_status(
+    device_id: str, req_id: str
+) -> CommandStatus:
+    """Read-only command tracking lookup (todo 10 status polling).
+
+    Returns the command_log row for ``req_id`` scoped to ``device_id``.
+    Unknown device or req_id → 404. Never publishes, never mutates.
+    """
+    try:
+        with get_db_context() as db:
+            row = (
+                db.query(CommandLog)
+                .filter(
+                    CommandLog.device_id == device_id,
+                    CommandLog.req_id == req_id,
+                )
+                .first()
+            )
+            if row is None:
+                device = db.query(Device).filter(Device.id == device_id).first()
+                if device is None:
+                    raise HTTPException(status_code=404, detail="Device not found")
+                raise HTTPException(status_code=404, detail="Command not found")
+            return CommandStatus(
+                req_id=row.req_id,
+                device_id=row.device_id,
+                action=row.action,
+                state=row.state,
+                ttl_sec=row.ttl_sec,
+                created_at=row.created_at,
+                acked_at=row.acked_at,
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            f"Failed to fetch command {req_id} for device {device_id}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=500, detail="Failed to fetch command status."
         ) from e
 
 

@@ -1,0 +1,97 @@
+=== TASK 9: Expiry sweep worker — evidence log ===
+date: 2026-09-15T21:16:09Z
+branch: develop
+head: 3e63bd1
+
+--- (a) BASELINE: no sweep exists ---
+src/ contents:
+config.py
+http_ingress.py
+mqtt_client.py
+__pycache__
+redis_writer.py
+registry.py
+grep sweep/expiry in services (excl .venv):
+/home/ferdzo/projects/iotDashboard/services/device_manager/app/app.py
+
+note: device_manager onboarding-token/cert 'expir' hits above are unrelated (no command sweep).
+--- (a) BASELINE BEHAVIOR: stale requested row ages without transition ---
+        req_id        |   state   | ttl_sec |          created_at           
+----------------------+-----------+---------+-------------------------------
+ task9-baseline-req-1 | requested |     300 | 2026-09-15 21:06:16.291202+00
+(1 row)
+
+INSERT 0 1
+sleep 5s (no sweep process exists anywhere to act)...
+        req_id        |   state   | ttl_sec |          created_at           
+----------------------+-----------+---------+-------------------------------
+ task9-baseline-req-1 | requested |     300 | 2026-09-15 21:06:16.291202+00
+(1 row)
+
+BASELINE RESULT: row with created_at 10min ago + ttl_sec=300 is still 'requested' -> no sweep exists. Confirmed.
+
+--- (b) IMPLEMENTATION ---
+new: services/mqtt_ingestion/src/expiry_sweep.py (expire_stale_commands + ExpirySweep 60s thread + create_expiry_sweep seam + cron entrypoint)
+wired: services/mqtt_ingestion/main.py (start_expiry_sweep after MQTT connect, non-fatal; stop() halts thread)
+seam note: ack-listener module NOT created (todo 8 owns it); sweep exposes create_expiry_sweep factory.
+
+--- (c) VERIFY: single pass ---
+expire_stale_commands() expired baseline stale row (10min old, ttl 300): count=1
+post-check: task9-baseline-req-1 state=expired
+failure path: direct call w/ bad URL raises OperationalError; ExpirySweep._run_once logs + survives (last_error set); ctor guards reject empty url / non-positive interval.
+
+--- (c) VERIFY: live 60s loop ---
+t+5..55s: short(req,ttl5)=requested, long(req,ttl3600)=requested, acked=acked
+t+60s: short=expired, long=requested, acked=acked -> per-command ttl honored; acked never touched.
+cron entrypoint: DATABASE_URL=... python -m src.expiry_sweep -> 'expired=0', exit 0.
+rows retained: 3 rows present (short=expired, long=requested, acked=acked); UPDATE-only, zero DELETEs in module (no .execute DELETE / delete()).
+
+--- (d) MANUAL-QA (psql before/after) ---
+BEFORE (insert): task9-short-req=requested/5, task9-long-req=requested/3600, task9-acked-req=acked/300
+AFTER (t+60s tick): task9-short-req=expired, task9-long-req=requested, task9-acked-req=acked
+binary observables: short-transitioned=YES, long-stayed-requested=YES, acked-untouched=YES, rows-deleted=NO
+--- CLEANUP: probe rows deleted, remaining task9 rows = 0 above ---
+=== (e) GIT STATUS (pre-commit) ===
+ M iotDashboard/device_manager_client.py
+ M services/device_manager/app/app.py
+ M services/device_manager/app/config.py
+ M services/device_manager/app/db_models.py
+ M services/device_manager/app/models.py
+ M services/device_manager/pyproject.toml
+ M services/device_manager/uv.lock
+ M services/mqtt_ingestion/main.py
+?? .omo/boulder.json
+?? .omo/drafts/
+?? .omo/evidence/db-write-todo14.log
+?? .omo/evidence/django-runserver-todo11.log
+?? .omo/evidence/django-runserver-todo19.log
+?? .omo/evidence/django-runserver-todo7.log
+?? .omo/evidence/django-runserver-todo8.log
+?? .omo/evidence/django-runserver-todo9.log
+?? .omo/evidence/final-verification-all-around-iot-platform.log
+?? .omo/evidence/mqtt-ingestion-todo13.log
+?? .omo/evidence/task-1-all-around-iot-platform.log
+?? .omo/evidence/task-10-all-around-iot-platform.log
+?? .omo/evidence/task-11-all-around-iot-platform.log
+?? .omo/evidence/task-12-all-around-iot-platform.log
+?? .omo/evidence/task-13-all-around-iot-platform.log
+?? .omo/evidence/task-14-all-around-iot-platform.log
+?? .omo/evidence/task-15-16-17-all-around-iot-platform.log
+?? .omo/evidence/task-18-all-around-iot-platform.log
+?? .omo/evidence/task-19-all-around-iot-platform.log
+?? .omo/evidence/task-2-all-around-iot-platform.log
+?? .omo/evidence/task-20-all-around-iot-platform.log
+?? .omo/evidence/task-3-all-around-iot-platform.log
+?? .omo/evidence/task-4-all-around-iot-platform.log
+?? .omo/evidence/task-5-all-around-iot-platform.log
+?? .omo/evidence/task-6-all-around-iot-platform.log
+?? .omo/evidence/task-7-all-around-iot-platform.log
+?? .omo/evidence/task-8-all-around-iot-platform.json
+?? .omo/evidence/task-8-all-around-iot-platform.log
+?? .omo/evidence/task-9-all-around-iot-platform.log
+?? .omo/evidence/task-9-phase2-platform-capabilities.log
+?? .omo/plans/
+?? .omo/run-continuation/
+?? .omo/start-work/
+?? services/device_manager/app/mqtt_publisher.py
+?? services/mqtt_ingestion/src/expiry_sweep.py

@@ -24,6 +24,24 @@ class MQTTConfig:
     keepalive: int = 60
     tls: bool = False
     ca_cert: Optional[str] = None
+    client_cert: Optional[str] = None
+    client_key: Optional[str] = None
+    # Redis stream backpressure knobs (stream/table names unchanged)
+    maxlen: int = 100000
+    lag_warn: int = 50000
+    pipeline_batch: int = 500
+
+
+@dataclass
+class DatabaseConfig:
+    url: Optional[str] = None
+
+
+@dataclass
+class HTTPConfig:
+    enabled: bool = True
+    host: str = "0.0.0.0"
+    port: int = 8080
 
 
 @dataclass
@@ -51,6 +69,22 @@ class Config:
             keepalive=int(os.getenv("MQTT_KEEPALIVE", 60)),
             tls=os.getenv("MQTT_TLS", "False").lower() in ("1", "true", "yes"),
             ca_cert=os.getenv("MQTT_CA_CERT", None),
+            client_cert=os.getenv("MQTT_CLIENT_CERT", None),
+            client_key=os.getenv("MQTT_CLIENT_KEY", None),
+            maxlen=int(os.getenv("MQTT_MAXLEN", 100000)),
+            lag_warn=int(
+                os.getenv("MQTT_LAG_WARN", os.getenv("LAG_WARN", 50000))
+            ),
+            pipeline_batch=int(os.getenv("MQTT_PIPELINE_BATCH", 500)),
+        )
+        self.database = DatabaseConfig(
+            url=os.getenv("DATABASE_URL", None),
+        )
+        self.http = HTTPConfig(
+            enabled=os.getenv("HTTP_INGRESS_ENABLED", "True").lower()
+            in ("1", "true", "yes"),
+            host=os.getenv("HTTP_INGRESS_HOST", "0.0.0.0"),
+            port=int(os.getenv("HTTP_INGRESS_PORT", 8080)),
         )
 
 

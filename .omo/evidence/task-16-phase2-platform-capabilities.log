@@ -1,0 +1,32 @@
+TASK-16 BASELINE (2026-09-15T22:01:58Z, branch=develop, head=977cbde)
+Dead files App.tsx.bak / hooks/useGridstack.ts / lib/utils.ts / components/TelemetryTrendCard.tsx / assets/react.svg: all ABSENT (purged by earlier work, commit cb6b518).
+Dead-name src hits: useGridstack=0 TelemetryTrendCard=0 lib/utils=0 react.svg=0 bar-chart=0 useAllMetrics=0 gridstack=1 (frontend/src/styles/widget-card.css:56 comment only).
+Subscription hook: absent. QueryClient: bare `new QueryClient()` (App.tsx:14). package.json: gridstack ^12.3.3 present. Tracked tree: clean.
+
+IMPLEMENTATION
+1. NEW frontend/src/hooks/useTelemetrySubscription.ts — polling-backed today, delegates 1:1 to useTelemetrySeries (same params -> same queryKey/queryFn -> identical data); WS-compatible signature for Phase-3: transport?: 'polling'|'websocket' (accepted, always resolves to polling) + onMessage?: (reading)=>void (documented inert until push transport lands). Returns {data,isLoading,isFetching,error,refetch,transport:'polling',connected}. Transport never switched: polling stays.
+2. frontend/src/App.tsx — QueryClient global defaults { queries: { staleTime: 10_000, retry: 2 } }. Per-hook staleTime (useTelemetrySeries 3000, useDeviceMetrics 60000) overrides global, so existing refresh behavior unchanged.
+3. frontend/src/hooks/index.ts — export hook + TelemetrySubscriptionParams/TelemetrySubscription/TelemetryTransport types.
+4. Purge remainder: removed gridstack dep from frontend/package.json AND hand-removed its 2 stanzas from package-lock.json (rejected npm's unrelated @tailwindcss/oxide churn to keep diff minimal; lock verified JSON-valid, zero gridstack refs). Reworded widget-card.css:56 comment "gridstack" -> "grid layout" (no selector/behavior change).
+5. Scope respected: no widget/auth/dashboard-config/schema/theme-runtime edits; useTelemetrySeries.ts untouched (read-only wrap target).
+
+VERIFY
+- Dead-name sweep post-change: useGridstack=0 TelemetryTrendCard=0 lib/utils=0 react.svg=0 bar-chart=0 useAllMetrics=0 gridstack=0 App.tsx.bak=0 (0 src hits; manifests zero too).
+- tsc: `npx tsc -b` exit 0.
+- Equivalence probe (temp file __equivalence.probe.tsx, compiled then DELETED): called both hooks with LineChartWidget shape (deviceId/metric/hours/startTime/endTime/limit 500 + transport/onMessage) and StatWidget shape (limit 100 + enabled) — tsc exit 0, Telemetry[] assignable both ways, transport==='polling', connected===enabled. Data identical by construction (shared queryKey/queryFn via delegation).
+- eslint: `npx eslint .` exit 1 with 9 errors, BYTE-IDENTICAL to pre-change baseline (git stash A/B diff empty); all in untouched out-of-scope files (api/index.ts any x4, AuthContext + useWellnessState react-refresh, Login any, types/api.ts any x2). New/edited files: zero findings. NOT fixed: would require touching auth files, forbidden by scope.
+- vite build: `npm run build` exit 0, "built in 3.09s", 934 modules, dist emitted (index-0lGJA9rj.js 1017.62kB; chunk-size warning pre-existing).
+
+MANUAL-QA (binary observables)
+- build exit 0: YES. dist/ assets emitted with new hashes: YES (index-Dt1V9JjY.css, index-0lGJA9rj.js).
+- dead names grep zero: YES. Probe compiled then removed (no residue, git status clean of it): YES.
+- behavior deltas: none intended — polling intervals unchanged, per-hook staleTime overrides intact, no transport switch.
+
+GIT / CLEANUP RECEIPT
+- Changed (tracked): frontend/package.json, frontend/package-lock.json, frontend/src/App.tsx, frontend/src/hooks/index.ts, frontend/src/styles/widget-card.css. New: frontend/src/hooks/useTelemetrySubscription.ts. No sibling files touched. No push (per instructions).
+- Temp artifacts: /tmp/opencode/{task16-baseline.txt,eslint-before.txt,eslint-after.txt,tsc-probe.txt,build16.txt,build16-final.txt} (outside repo, harmless); __equivalence.probe.tsx deleted pre-commit.
+- Commit: chore(frontend): subscription-ready hooks and dead-code purge.
+
+RISKS
+- eslint remains red on 9 pre-existing errors in out-of-scope files (needs follow-up todo with auth-file scope; explicitly not fixed here).
+- node_modules still contains gridstack installartifact (package manager state, not source; next `npm ci`/prune drops it; build unaffected since nothing imports it).

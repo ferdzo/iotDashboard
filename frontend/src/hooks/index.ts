@@ -1,4 +1,6 @@
 export { useTelemetrySeries } from './useTelemetrySeries'
-export { useDeviceMetrics, useAllMetrics } from './useDeviceMetrics'
+export { useTelemetrySubscription } from './useTelemetrySubscription'
+export type { TelemetrySubscriptionParams, TelemetrySubscription, TelemetryTransport } from './useTelemetrySubscription'
+export { useDeviceMetrics } from './useDeviceMetrics'
 export { useDashboardConfig } from './useDashboardConfig'
 export type { WidgetConfig, DashboardConfig, WidgetType } from './useDashboardConfig'

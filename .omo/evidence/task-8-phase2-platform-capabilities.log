@@ -1,0 +1,91 @@
+=== TASK 8: Device ack listener — evidence log ===
+date: 2026-09-15 (UTC)
+branch: develop
+head-pre: febc116 feat(actuation): BFF command publish path
+
+--- (a) BASELINE (no listener exists) ---
+config.py
+expiry_sweep.py
+http_ingress.py
+mqtt_client.py
+__pycache__
+redis_writer.py
+registry.py
+grep ack_listener in services (excl __pycache__/.venv):
+services/mqtt_ingestion/src/expiry_sweep.py:(e.g. ``src/ack_listener.py`` — NOT created here) and share this
+<stdin>:11: DeprecationWarning: Callback API version 1 is deprecated, update to latest version
+BEFORE: ('task8-baseline-req-1', 'requested', None)
+publish rc: 0
+AFTER (4s, no listener): ('task8-baseline-req-1', 'requested', None)
+
+--- (a2) BASELINE CORRECTED (honest broker path) ---
+Host->1883 TCP "CONNECT OK" was misleading: paho connect() returns before
+CONNACK, and mosquitto binds 1883 to 127.0.0.1 inside its own netns, so the
+first probe's publish never reached the broker (rc=0 only means queued).
+Re-ran baseline via container-local mosquitto_pub (proven path: t8/probe PUB OK).
+BEFORE: ('task8-baseline-req-2', 'requested', None)
+container-local publish rc: 0 
+AFTER (4s, no listener): ('task8-baseline-req-2', 'requested', None)
+BASELINE HOLDS: status publish changed nothing without the listener
+
+--- (b) IMPLEMENT (tracked code files only) ---
+new: services/mqtt_ingestion/src/ack_listener.py (ACK_TOPIC devices/+/status QoS1;
+  normalize_status {acked,ack,ok,success,done}->{acked}, {failed,fail,error,nack,rejected}->{failed},
+  else ValueError; apply_ack(database_url, req_id, status, detail)->(state, transitioned):
+  requested->acked/failed with acked_at=now(), detail merged as payload.ack_detail
+  (original keys preserved, rows never deleted); unknown req_id -> warn + (None, False);
+  settled rows -> info + (state, False), never regressed; AckListener paho client with
+  tls_set(ca_certs,certfile,keyfile,PROTOCOL_TLS_CLIENT) same shape as
+  mqtt_client.py:125-130, loop_start thread (never blocks telemetry loop_forever),
+  per-message try/except (DB outage -> error_total + last_error, never raises);
+  counters acked/failed/unknown/settled/dropped/error; create_ack_listener seam
+  mirroring create_expiry_sweep, creates NO sweep of its own)
+mod: services/mqtt_ingestion/main.py (import create_ack_listener; self.ack_listener;
+  start_ack_listener() non-fatal alongside start_expiry_sweep(); start() calls it
+  after MQTT connect; stop() halts it; sweep docstring updated: listener no longer "future")
+untouched: services/mqtt_ingestion/src/mqtt_client.py, src/expiry_sweep.py,
+  todo-7 files (device_manager_client.py, device_manager/app/*, mqtt_publisher.py)
+
+--- (c) VERIFY: unit-level (no broker; exit 0) ---
+- imports ok (ack_listener ACK_TOPIC + expiry_sweep seam + main.start_ack_listener)
+- normalize_status rejects bogus/''/None/42 with ValueError; empty-url/empty-req guards ok
+- isolation: bad-DB listener _on_message -> error_total=1, last_error set, NO raise
+- malformed (non-JSON, non-object, bad topic, empty device) -> dropped_total, NO raise
+
+--- (c) VERIFY: live roundtrip (pg=docker infrastructure-timescaledb-1,
+broker=docker infrastructure-mosquitto-1; listener on host via localhost:8883
+mTLS ingestion identity (require_certificate), acks via container-local 1883
+mosquitto_pub; requested rows inserted directly mirroring todo-7 command_log
+write since device_manager server path was already proven in task-7) ---
+COLOCATION: sweep_threads=1 listener_alive=True shared_db=True (one sweep, shared URL)
+HAPPY acked: state=acked acked_at=2026-09-15 21:30:44.482370+00:00 elapsed=0.2s under-5s=True
+FAILED: state=failed acked_at_set=True payload={'temp': 25, 'ack_detail': 'valve stuck'}
+UNKNOWN ignored: warn "Ignoring ack for unknown req_id: 'no-such-req'", unknown_total=1, rows created=0
+MALFORMED dropped_total=1 with warn; loop alive (next valid ack -> acked)
+terminal protected: late dup ack on acked row stays ('acked', {}) settled_total=1
+counters: acked=2 failed=1 unknown=1 settled=1 dropped=1 errors=0
+
+--- (d) MANUAL-QA (binary observables) ---
+psql before: (t8-e2e-req-acked-1, requested, NULL); after publish: (acked, 2026-09-15 21:30:44+00) in 0.2s
+psql failed row: (failed, acked_at set, payload has original temp=25 + ack_detail='valve stuck')
+warn lines for unknown + malformed captured above (copy-pasted from listener log)
+telemetry untouched: no diff in mqtt_client.py/redis_writer.py/registry.py/db_write
+
+--- (e) SCOPE / ADVERSARIAL NOTES ---
+- dirty_worktree: many untracked .omo files + sibling commits present; staged ONLY
+  the 3 intended paths (verified via git status/diff --name-only pre-commit).
+- misleading_success_output: host->1883 paho connect() "OK" + publish rc=0 were
+  hollow (no CONNACK; broker binds 1883 to container loopback). Caught by zero
+  counters, redid baseline + live via container-local pub and 8883+mTLS listener.
+- stale_state: fresh req_ids per run; leftover rows from failed runs deleted before rerun.
+- hung commands: every broker/sub/DB call wrapped in timeout (<=110s); listener/sweep stopped.
+- telemetry overlap note: devices/{id}/status also matches telemetry devices/#, so the
+  telemetry client drop-logs status payloads as invalid-payload (pre-existing, harmless;
+  mqtt_client.py read-only, not changed).
+
+--- (f) CLEANUP RECEIPT ---
+- probe rows: DELETE WHERE req_id LIKE 't8-%' -> 3 rows; devices LIKE 't8-%' -> 1 row;
+  command_log total now 0; no t8 residue (re-queried, not cached).
+- temp secrets shredded: shred -u /tmp/opencode/task8/mtls/* (ca.crt, ingestion.crt/key
+  copies read via docker exec -u 0); harness logs removed; /tmp/opencode/task8 removed.
+- KEPT: no new runtime files/certs (reused existing ingestion identity + ca.crt; nothing committed).
