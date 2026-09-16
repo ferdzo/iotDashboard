@@ -2,19 +2,8 @@ import { useQuery } from '@tanstack/react-query'
 import { wellnessApi } from '../../api'
 import { useWellnessState } from '../../hooks/useWellnessState'
 import type { WidgetConfig } from '../../hooks'
-import './widget-styles.css'
-
-const CheckIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-  </svg>
-)
-
-const StepIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-  </svg>
-)
+import { WidgetSkeleton, WidgetError, WidgetEmpty } from '../ui'
+import Icon from '../Icon'
 
 interface RunSuitabilityWidgetProps {
   config: WidgetConfig
@@ -40,35 +29,14 @@ export default function RunSuitabilityWidget({ config }: RunSuitabilityWidgetPro
     enabled: !!deviceId && !!widgetCity,
   })
 
-  if (isLoading) {
-    return (
-      <div className="widget-card card bg-base-100 h-full">
-        <div className="card-body flex items-center justify-center">
-          <span className="loading loading-spinner loading-lg"></span>
-        </div>
-      </div>
-    )
+  if (!deviceId || !widgetCity) {
+    return <WidgetEmpty message="Select a health device and a city" />
   }
 
+  if (isLoading) return <WidgetSkeleton lines={3} />
+
   if (error || !data) {
-    return (
-      <div className="widget-card card bg-base-100 h-full">
-        <div className="card-body flex flex-col items-center justify-center text-center gap-2">
-          <div className="alert alert-error text-xs">
-            <span>
-              {error instanceof Error ? error.message : 'No data available'}
-            </span>
-          </div>
-          {(!deviceId || !widgetCity) && (
-            <p className="text-xs text-base-content/60">
-              {!deviceId && 'Select a health device'}
-              {!deviceId && !widgetCity && ' and '}
-              {!widgetCity && 'Select a city'}
-            </p>
-          )}
-        </div>
-      </div>
-    )
+    return <WidgetError message={error instanceof Error ? error.message : 'No data available'} />
   }
 
   const getStatusColor = (status: string) => {
@@ -90,10 +58,7 @@ export default function RunSuitabilityWidget({ config }: RunSuitabilityWidgetPro
   }
 
   return (
-    <div className="widget-card card bg-base-100 h-full flex flex-col">
-      <div className="card-body p-3 flex flex-col gap-2 flex-1 min-h-0">
-        <h2 className="card-title text-sm mb-2">{config.title}</h2>
-        
+    <div className="flex flex-col gap-2 min-h-0">
         {/* Status Badge */}
         <div className="flex flex-col items-center justify-center text-center gap-2">
           <div className={`w-20 h-20 rounded-full flex items-center justify-center border-4 ${getStatusColor(data.status)} ${getBgColor(data.status)}`}>
@@ -107,7 +72,7 @@ export default function RunSuitabilityWidget({ config }: RunSuitabilityWidgetPro
             <p className="font-medium text-sm">{data.primary_reason}</p>
             
             {/* Score Breakdown */}
-            <div className="flex gap-2 text-xs text-base-content/60 justify-center">
+            <div className="flex gap-2 text-xs text-base-content/60 justify-center tnum">
               <span>Weather: {data.scores.weather.toFixed(0)}</span>
               <span>•</span>
               <span>Air: {data.scores.air_quality.toFixed(0)}</span>
@@ -142,7 +107,7 @@ export default function RunSuitabilityWidget({ config }: RunSuitabilityWidgetPro
           <div className="mt-1 pt-1 border-t border-base-300">
             <div className="text-xs">
               <div className="flex items-start gap-1.5">
-                <span className="text-success"><CheckIcon /></span>
+                <span className="text-success"><Icon name="check" className="size-4" /></span>
                 <span className="opacity-80">{data.suggestions[0]}</span>
               </div>
             </div>
@@ -151,8 +116,7 @@ export default function RunSuitabilityWidget({ config }: RunSuitabilityWidgetPro
 
         {/* Quick Health Stats */}
         <div className="text-xs text-base-content/60 flex gap-2 justify-center pt-1 border-t border-base-300 flex-shrink-0 mt-auto">
-          <span className="flex items-center gap-1">
-            <StepIcon />
+          <span className="flex items-center gap-1 tnum">
             {(data.health_data?.steps ?? null) !== null ? (
               <>{data.health_data.steps.toLocaleString()} steps</>
             ) : (
@@ -160,7 +124,6 @@ export default function RunSuitabilityWidget({ config }: RunSuitabilityWidgetPro
             )}
           </span>
         </div>
-      </div>
     </div>
   )
 }
