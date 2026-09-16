@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import type { WidgetConfig } from '../../hooks'
 import { weatherApi } from '../../api'
+import { WidgetSkeleton, WidgetError, WidgetEmpty } from '../ui'
 import './widget-styles.css'
 
 interface AirQualityWidgetProps {
@@ -21,35 +22,9 @@ export default function AirQualityWidget({ config }: AirQualityWidgetProps) {
     staleTime: 240000, // Consider fresh for 4 minutes
   })
 
-  if (isLoading) {
-    return (
-      <div className="widget-card card bg-base-100 h-full">
-        <div className="card-body flex items-center justify-center">
-          <span className="loading loading-spinner loading-lg"></span>
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="widget-card card bg-base-100 h-full">
-        <div className="card-body">
-          <h2 className="card-title text-sm truncate">{config.title}</h2>
-          <div className="flex flex-col items-center justify-center flex-1">
-            <p className="text-error text-sm text-center">
-              Failed to load air quality data for {city}
-            </p>
-            <p className="text-xs text-base-content/60 mt-2">
-              Try: skopje, bitola, tetovo
-            </p>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (!airQuality) return null
+  if (isLoading) return <WidgetSkeleton lines={3} />
+  if (error) return <WidgetError message={`Failed to load air quality data for ${city}. Try: skopje, bitola, tetovo`} />
+  if (!airQuality) return <WidgetEmpty message="No air quality data" />
 
   // Get AQI color based on status
   const getStatusColor = (status: string) => {
@@ -74,10 +49,7 @@ export default function AirQualityWidget({ config }: AirQualityWidgetProps) {
   const pm25 = airQuality.measurements.pm25
 
   return (
-    <div className="widget-card card bg-base-100 h-full">
-      <div className="card-body">
-        <h2 className="card-title text-sm truncate">{config.title}</h2>
-        <div className="flex flex-col items-center justify-center flex-1">
+    <div className="flex flex-col items-center justify-center flex-1 min-h-0">
           {/* Air quality icon */}
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -98,13 +70,13 @@ export default function AirQualityWidget({ config }: AirQualityWidgetProps) {
           <div className="grid grid-cols-2 gap-2 w-full mb-2">
             {pm10 && (
               <div className="text-center">
-                <div className="text-xl font-bold">{pm10.average.toFixed(1)}</div>
+                <div className="text-xl font-bold tracking-tight tnum">{pm10.average.toFixed(1)}</div>
                 <div className="text-xs text-base-content/60">PM10 μg/m³</div>
               </div>
             )}
             {pm25 && (
               <div className="text-center">
-                <div className="text-xl font-bold">{pm25.average.toFixed(1)}</div>
+                <div className="text-xl font-bold tracking-tight tnum">{pm25.average.toFixed(1)}</div>
                 <div className="text-xs text-base-content/60">PM2.5 μg/m³</div>
               </div>
             )}
@@ -129,13 +101,11 @@ export default function AirQualityWidget({ config }: AirQualityWidgetProps) {
           </div>
 
           {/* City and sensor count */}
-          <div className="text-xs text-base-content/40 mt-2 px-2 w-full overflow-hidden">
+          <div className="text-[11px] text-base-content/45 mt-2 px-2 w-full overflow-hidden">
             <div className="truncate text-center">
               {airQuality.city.charAt(0).toUpperCase() + airQuality.city.slice(1)} • {airQuality.sensor_count} sensors
             </div>
           </div>
-        </div>
-      </div>
     </div>
   )
 }

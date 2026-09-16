@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { devicesApi } from '../../api'
 import type { WidgetConfig } from '../../hooks'
+import { WidgetSkeleton, WidgetError } from '../ui'
 import './widget-styles.css'
 
 type IconProps = { className?: string }
@@ -73,30 +74,8 @@ export default function ComfortIndexWidget({ config }: ComfortIndexWidgetProps) 
     enabled: !!deviceId,
   })
 
-  if (isLoading) {
-    return (
-      <div className="widget-card card bg-base-100 h-full">
-        <div className="card-body flex items-center justify-center">
-          <span className="loading loading-spinner loading-lg"></span>
-        </div>
-      </div>
-    )
-  }
-
-  if (error || !data) {
-    return (
-      <div className="widget-card card bg-base-100 h-full">
-        <div className="card-body flex items-center justify-center">
-          <div className="alert alert-error">
-            <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span>Failed to load comfort index</span>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  if (isLoading) return <WidgetSkeleton lines={4} />
+  if (error || !data) return <WidgetError message="Failed to load comfort index" />
 
   const getRatingColor = (rating: string) => {
     switch (rating) {
@@ -118,14 +97,10 @@ export default function ComfortIndexWidget({ config }: ComfortIndexWidgetProps) 
   }
 
   return (
-    <div className="widget-card card bg-base-100 h-full">
-      <div className="card-body p-3 gap-2">
-        {/* Title */}
-        <h2 className="card-title text-sm mb-1">{config.title}</h2>
-        
+    <div className="flex flex-col gap-2 min-h-0">
         {/* Overall Score */}
         <div className="text-center">
-          <div className={`text-4xl font-bold ${getScoreColor(data.overall_score)}`}>
+          <div className={`text-4xl font-bold tracking-tight tnum ${getScoreColor(data.overall_score)}`}>
             {data.overall_score}
           </div>
           <div className={`text-lg font-semibold ${getRatingColor(data.rating)} mt-0.5`}>
@@ -203,7 +178,6 @@ export default function ComfortIndexWidget({ config }: ComfortIndexWidgetProps) 
           </div>
         </div>
       )}
-      </div>
     </div>
   )
 }

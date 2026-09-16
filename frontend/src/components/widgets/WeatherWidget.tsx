@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { WidgetConfig } from '../../hooks'
 import { weatherApi } from '../../api'
+import { WidgetSkeleton, WidgetError, WidgetEmpty } from '../ui'
 
 type IconProps = {
   className?: string
@@ -131,30 +132,9 @@ export default function WeatherWidget({ config }: WeatherWidgetProps) {
     staleTime: 240000, // Consider fresh for 4 minutes
   })
 
-  if (isLoading) {
-    return (
-      <div className="widget-card card bg-base-100 h-full">
-        <div className="card-body flex items-center justify-center">
-          <span className="loading loading-spinner loading-lg"></span>
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="widget-card card bg-base-100 h-full">
-        <div className="card-body">
-          <h2 className="card-title text-sm truncate">{config.title}</h2>
-          <div className="flex flex-col items-center justify-center flex-1">
-            <p className="text-error">Failed to load weather data</p>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (!weather) return null
+  if (isLoading) return <WidgetSkeleton lines={3} />
+  if (error) return <WidgetError message="Failed to load weather data" />
+  if (!weather) return <WidgetEmpty message="No weather data" />
 
   const getWeatherIcon = (code: number) => {
     if (code === 0 || code === 1) return <SunIcon className="w-16 h-16 text-warning" />
@@ -171,15 +151,12 @@ export default function WeatherWidget({ config }: WeatherWidgetProps) {
   }
 
   return (
-    <div className="widget-card card bg-base-100 h-full">
-      <div className="card-body">
-        <h2 className="card-title text-sm truncate">{config.title}</h2>
-        <div className="flex flex-col items-center justify-center flex-1">
+    <div className="flex flex-col items-center justify-center flex-1 min-h-0">
           {/* Weather Icon */}
           <div className="mb-1 text-primary">{getWeatherIcon(weather.weather_code)}</div>
 
           {/* Temperature */}
-          <div className="text-3xl font-bold">{weather.temperature.toFixed(1)}°C</div>
+          <div className="text-3xl font-bold tracking-tight tnum">{weather.temperature.toFixed(1)}°C</div>
           <div className="text-xs text-base-content/60">
             Feels like {weather.apparent_temperature.toFixed(1)}°C
           </div>
@@ -212,11 +189,9 @@ export default function WeatherWidget({ config }: WeatherWidgetProps) {
           </div>
 
           {/* Location */}
-          <div className="text-xs text-base-content/40 mt-3 px-2 w-full overflow-hidden">
+          <div className="text-[11px] text-base-content/45 mt-2 px-2 w-full overflow-hidden">
             <div className="truncate text-center">{weather.location}</div>
           </div>
-        </div>
-      </div>
     </div>
   )
 }
