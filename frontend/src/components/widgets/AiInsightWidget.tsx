@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { telemetryApi } from '../../api'
 import type { WidgetConfig } from '../../hooks'
-import { WidgetSkeleton, WidgetError, WidgetEmpty } from '../ui'
+import { WidgetSkeleton, WidgetError } from '../ui'
 import Icon from '../Icon'
 
 interface AiInsightWidgetProps {

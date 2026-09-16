@@ -80,5 +80,6 @@ export default function GaugeWidget({ config }: GaugeWidgetProps) {
           </div>
         )}
       </div>
+    </div>
   )
 }

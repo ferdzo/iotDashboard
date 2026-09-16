@@ -168,9 +168,11 @@ body,
 /* Dialog/AlertDialog Content */
 [data-radix-dialog-content],
 [data-radix-alert-dialog-content] {
-  background-color: white;
-  border-radius: 0.5rem;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  background-color: var(--color-base-100);
+  color: var(--color-base-content);
+  border: 1px solid var(--color-base-300);
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.05);
   position: fixed;
   top: 50%;
   left: 50%;
@@ -186,13 +188,4 @@ body,
 [data-radix-dialog-content]:focus,
 [data-radix-alert-dialog-content]:focus {
   outline: none;
-}
-
-/* Dark mode support for dialogs */
-@media (prefers-color-scheme: dark) {
-  [data-radix-dialog-content],
-  [data-radix-alert-dialog-content] {
-    background-color: #1f2937;
-    color: white;
-  }
 }

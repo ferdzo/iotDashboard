@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { wellnessApi } from '../../api'
-import { useWellnessState } from '../../hooks/useWellnessState'
+import { useWellnessState } from '../../hooks/useWellness'
 import type { WidgetConfig } from '../../hooks'
 import { WidgetSkeleton, WidgetError, WidgetEmpty } from '../ui'
 import Icon from '../Icon'
