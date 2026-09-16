@@ -12,6 +12,7 @@ import {
 import { useTelemetrySeries } from '../../hooks'
 import type { WidgetConfig } from '../../hooks'
 import { formatMetricName } from '../../utils/formatters'
+import { WidgetSkeleton, WidgetError, WidgetEmpty } from '../ui'
 
 interface LineChartWidgetProps {
   config: WidgetConfig
@@ -184,86 +185,45 @@ function LineChartWidget({ config }: LineChartWidgetProps) {
     [metricIds, colors]
   )
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <span className="loading loading-spinner loading-lg"></span>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="alert alert-error">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          className="stroke-current shrink-0 h-6 w-6"
-          fill="none"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="2"
-            d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
-        <span>Error loading data: {error.message}</span>
-      </div>
-    )
-  }
-
-  if (chartData.length === 0) {
-    return (
-      <div className="alert alert-info">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          className="stroke-current shrink-0 w-6 h-6"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="2"
-            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-          ></path>
-        </svg>
-        <span>No data available for this metric</span>
-      </div>
-    )
-  }
+  if (isLoading) return <WidgetSkeleton lines={4} />
+  if (error) return <WidgetError message={error.message} />
+  if (chartData.length === 0) return <WidgetEmpty message="No data available for this metric" />
 
   return (
-    <div className="card bg-base-100 h-full overflow-hidden">
-      <div className="card-body p-4">
-        <h3 className="card-title text-sm mb-2">
-          {config.title || metricIds.map(formatMetricName).join(' & ')}
-        </h3>
-        <ResponsiveContainer width="100%" height={visualization?.height || 280}>
-          <LineChart 
-            data={chartData} 
-            margin={{ top: 5, right: 20, left: 0, bottom: 50 }}
-            syncId="dashboard-charts" // Sync charts for better performance
-          >
+    <div className="h-full min-h-0 tnum">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart
+          data={chartData}
+          margin={{ top: 5, right: 12, left: -8, bottom: 0 }}
+          syncId="dashboard-charts" // Sync charts for better performance
+        >
             {visualization?.showGrid !== false && (
-              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="var(--color-base-content)"
+                opacity={0.12}
+              />
             )}
             <XAxis
               dataKey="time"
-              tick={{ fontSize: 11 }}
-              angle={-45}
-              textAnchor="end"
-              height={50}
+              tick={{ fontSize: 11, fill: 'var(--color-base-content)', opacity: 0.55 }}
+              axisLine={false}
+              tickLine={false}
               interval="preserveStartEnd" // Reduce number of ticks
             />
-            <YAxis tick={{ fontSize: 12 }} />
+            <YAxis
+              tick={{ fontSize: 11, fill: 'var(--color-base-content)', opacity: 0.55 }}
+              axisLine={false}
+              tickLine={false}
+              width={44}
+            />
             <Tooltip
               contentStyle={{
-                backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                border: 'none',
-                borderRadius: '8px',
-                color: 'white',
+                backgroundColor: 'var(--color-base-300)',
+                border: '1px solid var(--color-base-300)',
+                borderRadius: '0.5rem',
+                color: 'var(--color-base-content)',
+                fontSize: 12,
               }}
               labelFormatter={(label, payload) => {
                 // Use fullDateTime from the data point for tooltip
@@ -271,11 +231,12 @@ function LineChartWidget({ config }: LineChartWidgetProps) {
               }}
               formatter={(value: number) => [value.toFixed(2)]}
             />
-            {visualization?.showLegend !== false && <Legend />}
+            {visualization?.showLegend !== false && (
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+            )}
             {lines}
           </LineChart>
         </ResponsiveContainer>
-      </div>
     </div>
   )
 }

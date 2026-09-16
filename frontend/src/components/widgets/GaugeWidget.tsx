@@ -1,12 +1,13 @@
 import { useTelemetrySeries } from '../../hooks'
 import type { WidgetConfig } from '../../hooks'
+import { WidgetSkeleton, WidgetError, WidgetEmpty } from '../ui'
 
 interface GaugeWidgetProps {
   config: WidgetConfig
 }
 
 export default function GaugeWidget({ config }: GaugeWidgetProps) {
-  const { deviceIds, metricIds, timeframe, title } = config
+  const { deviceIds, metricIds, timeframe } = config
 
   const deviceId = deviceIds[0]
   const metric = metricIds[0]
@@ -35,29 +36,14 @@ export default function GaugeWidget({ config }: GaugeWidgetProps) {
   if (percentage > ranges.medium) color = 'text-error'
   else if (percentage > ranges.low) color = 'text-warning'
 
-  if (isLoading) {
-    return (
-      <div className="card bg-base-200 animate-pulse">
-        <div className="card-body h-48"></div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="card bg-error/10">
-        <div className="card-body">
-          <p className="text-error text-sm">Error: {error.message}</p>
-        </div>
-      </div>
-    )
-  }
+  if (isLoading) return <WidgetSkeleton lines={2} />
+  if (error) return <WidgetError message={error.message} />
+  if (!latest) return <WidgetEmpty message="No readings yet" />
 
   return (
-    <div className="card bg-base-100 shadow">
-      <div className="card-body items-center text-center">
-        <h3 className="card-title text-base">{title || metric}</h3>
-        <div className="relative w-32 h-32 mt-4">
+    <div className="flex flex-col items-center text-center gap-1">
+      <div className="tnum">
+        <div className="relative w-32 h-32">
           <svg className="w-full h-full transform -rotate-90">
             <circle
               cx="64"
@@ -81,23 +67,18 @@ export default function GaugeWidget({ config }: GaugeWidgetProps) {
               strokeLinecap="round"
             />
           </svg>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div>
-              <div className={`text-3xl font-bold ${color}`}>
-                {value.toFixed(1)}
-              </div>
-              {latest?.unit && (
-                <div className="text-sm text-base-content/60">{latest.unit}</div>
-              )}
-            </div>
+          <div className={`text-3xl font-bold tracking-tight tnum ${color}`}>
+            {value.toFixed(1)}
           </div>
+          {latest?.unit && (
+            <div className="text-sm text-base-content/60">{latest.unit}</div>
+          )}
         </div>
         {latest && (
-          <div className="text-xs text-base-content/50 mt-4">
+          <div className="text-[11px] text-base-content/45 mt-1">
             Updated {new Date(latest.time).toLocaleTimeString()}
           </div>
         )}
       </div>
-    </div>
   )
 }

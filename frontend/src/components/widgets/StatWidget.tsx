@@ -1,13 +1,13 @@
 import { useTelemetrySeries } from '../../hooks'
 import type { WidgetConfig } from '../../hooks'
-import { formatMetricName } from '../../utils/formatters'
+import { WidgetSkeleton, WidgetError, WidgetEmpty } from '../ui'
 
 interface StatWidgetProps {
   config: WidgetConfig
 }
 
 export default function StatWidget({ config }: StatWidgetProps) {
-  const { deviceIds, metricIds, timeframe, title } = config
+  const { deviceIds, metricIds, timeframe } = config
 
   const deviceId = deviceIds[0]
   const metric = metricIds[0]
@@ -27,51 +27,32 @@ export default function StatWidget({ config }: StatWidgetProps) {
   const min = values.length > 0 ? Math.min(...values) : 0
   const max = values.length > 0 ? Math.max(...values) : 0
 
-  if (isLoading) {
-    return (
-      <div className="card bg-base-200 animate-pulse">
-        <div className="card-body h-32"></div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="card bg-error/10">
-        <div className="card-body">
-          <p className="text-error text-sm">Error: {error.message}</p>
-        </div>
-      </div>
-    )
-  }
+  if (isLoading) return <WidgetSkeleton lines={2} />
+  if (error) return <WidgetError message={error.message} />
+  if (data.length === 0) return <WidgetEmpty message="No readings yet" />
 
   return (
-    <div className="card bg-base-100 shadow">
-      <div className="card-body">
-        <div className="text-sm uppercase tracking-wide text-base-content/60">
-          {title || formatMetricName(metric)}
+    <div className="flex flex-col gap-1">
+      <div className="text-4xl font-bold tracking-tight text-primary tnum">
+        {latest ? latest.value.toFixed(1) : '—'}
+        {latest?.unit && <span className="text-lg font-medium ml-1.5 text-base-content/60">{latest.unit}</span>}
+      </div>
+      <div className="grid grid-cols-3 gap-2 mt-2 text-sm">
+        <div className="rounded-lg bg-base-200/70 px-2 py-1.5">
+          <div className="text-[11px] uppercase tracking-wide text-base-content/50">Min</div>
+          <div className="font-semibold tnum">{min.toFixed(1)}</div>
         </div>
-        <div className="text-4xl font-bold text-primary">
-          {latest ? latest.value.toFixed(1) : '—'}
-          {latest?.unit && <span className="text-xl ml-2">{latest.unit}</span>}
+        <div className="rounded-lg bg-base-200/70 px-2 py-1.5">
+          <div className="text-[11px] uppercase tracking-wide text-base-content/50">Avg</div>
+          <div className="font-semibold tnum">{average.toFixed(1)}</div>
         </div>
-        <div className="grid grid-cols-3 gap-2 mt-4 text-sm">
-          <div>
-            <div className="text-base-content/60">Min</div>
-            <div className="font-semibold">{min.toFixed(1)}</div>
-          </div>
-          <div>
-            <div className="text-base-content/60">Avg</div>
-            <div className="font-semibold">{average.toFixed(1)}</div>
-          </div>
-          <div>
-            <div className="text-base-content/60">Max</div>
-            <div className="font-semibold">{max.toFixed(1)}</div>
-          </div>
+        <div className="rounded-lg bg-base-200/70 px-2 py-1.5">
+          <div className="text-[11px] uppercase tracking-wide text-base-content/50">Max</div>
+          <div className="font-semibold tnum">{max.toFixed(1)}</div>
         </div>
-        <div className="text-xs text-base-content/50 mt-2">
-          {data.length} readings in last {timeframe.hours || 24}h
-        </div>
+      </div>
+      <div className="text-[11px] text-base-content/45 mt-1">
+        {data.length} readings · last {timeframe.hours || 24}h
       </div>
     </div>
   )

@@ -1,6 +1,9 @@
 import { memo, useEffect, useRef } from 'react'
 import type { WidgetConfig } from '../../hooks'
 import { widgetRegistry } from './registry'
+import WidgetCard from '../ui/WidgetCard'
+import Icon from '../Icon'
+import { WidgetError } from '../ui'
 
 interface WidgetContainerProps {
   config: WidgetConfig
@@ -37,93 +40,30 @@ function WidgetContainer({ config, onRemove, onEdit, onHeightChange }: WidgetCon
 
   if (!WidgetComponent) {
     return (
-      <div className="card bg-error/10">
-        <div className="card-body">
-          <p className="text-error">Unknown widget type: {config.type}</p>
-        </div>
-      </div>
+      <WidgetCard title={config.title || config.type}>
+        <WidgetError message={`Unknown widget type: ${config.type}`} />
+      </WidgetCard>
     )
   }
 
   return (
     <div className="relative group h-full w-full">
-      <div className="absolute top-2 left-2 right-2 z-20 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-        <div className="drag-handle cursor-move flex items-center gap-1 px-2 py-1 rounded bg-base-100 shadow-md text-xs border border-base-300 pointer-events-auto">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-4 w-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 8h16M4 16h16"
-            />
-          </svg>
+      <div className="absolute top-2 left-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+        <div className="drag-handle cursor-move flex items-center gap-1 px-2 py-1 rounded-lg bg-base-100/90 backdrop-blur shadow-md text-[11px] font-medium border border-base-300 pointer-events-auto">
+          <Icon name="drag" className="size-3.5" />
           Drag
-        </div>
-        <div className="flex gap-1 pointer-events-auto">
-          {onEdit && (
-            <button
-              type="button"
-              className="btn btn-xs btn-circle btn-ghost bg-base-100 shadow-md border border-base-300 hover:bg-base-200"
-              onClick={(e) => {
-                e.stopPropagation()
-                onEdit(config.id)
-              }}
-              title="Edit widget"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                />
-              </svg>
-            </button>
-          )}
-          {onRemove && (
-            <button
-              type="button"
-              className="btn btn-xs btn-circle btn-ghost bg-base-100 shadow-md border border-base-300 hover:bg-error hover:text-error-content"
-              onClick={(e) => {
-                e.stopPropagation()
-                onRemove(config.id)
-              }}
-              title="Remove widget"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-4 w-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          )}
         </div>
       </div>
 
       {/* Allow overlay to float without reserving layout space */}
-      <div className="w-full" ref={contentRef}>
-        <WidgetComponent config={config} />
+      <div className="w-full h-full" ref={contentRef}>
+        <WidgetCard
+          title={config.title || config.type}
+          onEdit={onEdit ? () => onEdit(config.id) : undefined}
+          onRemove={onRemove ? () => onRemove(config.id) : undefined}
+        >
+          <WidgetComponent config={config} />
+        </WidgetCard>
       </div>
     </div>
   )
