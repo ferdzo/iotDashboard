@@ -10,10 +10,6 @@
   position: relative;
 }
 
-.layout:not(.layout--editing) .react-grid-item {
-  transition: none;
-}
-
 /* Drop placeholder — primary-tinted, matches the panel radius */
 .react-grid-placeholder {
   background: var(--color-primary) !important;
@@ -23,26 +19,22 @@
 }
 
 /* Move cursor while dragging an item */
-.layout--editing .react-grid-item.react-draggable-dragging {
+.react-grid-item.react-draggable-dragging {
   z-index: 30;
   cursor: grabbing;
 }
 
-.layout--editing .react-grid-item.react-draggable-dragging .panel {
+.react-grid-item.react-draggable-dragging .panel {
   box-shadow: 0 18px 40px -20px rgb(0 0 0 / 0.7);
 }
 
-/* Resize handle: subtle corner grip that only shows in Arrange mode */
+/* Resize handle: corner grip */
 .react-grid-item > .react-resizable-handle {
-  opacity: 0;
+  opacity: 0.55;
   transition: opacity 0.15s ease-in-out;
 }
 
-.layout--editing .react-grid-item > .react-resizable-handle {
-  opacity: 0.55;
-}
-
-.layout--editing .react-grid-item > .react-resizable-handle:hover {
+.react-grid-item > .react-resizable-handle:hover {
   opacity: 1;
 }
 

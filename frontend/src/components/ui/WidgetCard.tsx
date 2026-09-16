@@ -4,58 +4,27 @@ interface WidgetCardProps {
   title: string
   subtitle?: string
   status?: React.ReactNode
-  live?: boolean
-  editing?: boolean
   onEdit?: () => void
   onRemove?: () => void
   children: React.ReactNode
 }
 
-export default function WidgetCard({
-  title,
-  subtitle,
-  status,
-  live,
-  editing,
-  onEdit,
-  onRemove,
-  children,
-}: WidgetCardProps) {
+/**
+ * The one widget surface. Keeps the theme-aware `panel` treatment; the body is
+ * a flex column (like the card-body it replaced) so children using `flex-1`
+ * and percentage-height charts resolve their height.
+ */
+export default function WidgetCard({ title, subtitle, status, onEdit, onRemove, children }: WidgetCardProps) {
   return (
-    <section
-      className={`panel relative flex h-full flex-col overflow-hidden rounded-xl ${
-        editing ? 'ring-1 ring-primary/35' : ''
-      }`}
-    >
-      <header
-        className={`flex items-center justify-between gap-2 px-3.5 pt-3 pb-1.5 ${
-          editing ? 'rounded-t-xl bg-primary/[0.06]' : ''
-        }`}
-      >
-        <div
-          className={`flex min-w-0 flex-1 items-center gap-2 ${
-            editing ? 'widget-drag-handle cursor-grab active:cursor-grabbing' : ''
-          }`}
-        >
-          {editing && (
-            <Icon name="drag" className="size-3.5 shrink-0 text-base-content/40" />
-          )}
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              {live && (
-                <span className="relative flex size-1.5">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />
-                  <span className="relative inline-flex size-1.5 rounded-full bg-primary" />
-                </span>
-              )}
-              <h3 className="truncate font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-base-content/60">
-                {title}
-              </h3>
-            </div>
-            {subtitle && <p className="truncate text-[11px] text-base-content/40">{subtitle}</p>}
-          </div>
+    <section className="panel flex h-full flex-col overflow-hidden rounded-xl">
+      <header className="flex items-start justify-between gap-2 px-4 pt-3.5 pb-1">
+        <div className="min-w-0">
+          <h3 className="truncate font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-base-content/60">
+            {title}
+          </h3>
+          {subtitle && <p className="truncate text-[11px] text-base-content/40">{subtitle}</p>}
         </div>
-        <div className="flex shrink-0 items-center gap-0.5">
+        <div className="flex shrink-0 items-center gap-1">
           {status}
           {onEdit && (
             <button
@@ -81,7 +50,7 @@ export default function WidgetCard({
           )}
         </div>
       </header>
-      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden px-3.5 pt-1 pb-3.5">{children}</div>
+      <div className="flex min-h-0 flex-1 flex-col px-4 pt-1 pb-4">{children}</div>
     </section>
   )
 }

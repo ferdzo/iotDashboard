@@ -29,7 +29,6 @@ import type {
   WidgetTypeSchema,
 } from './widgets/configSchema'
 import { getWidgetSchema, widgetSchemaList } from './widgets/widgetSchemas'
-import { defaultSpanFor } from '../hooks/dashboardConfigSchema'
 
 export interface AddFormProps {
   mode: 'add'
@@ -60,19 +59,18 @@ const CALENDAR_RANGE_OPTIONS = [
   { value: 168, label: 'Next 7 days' },
 ]
 
-// Widths are spans of the 12-column responsive grid.
 const WIDTH_OPTIONS = [
-  { value: 3, label: 'Quarter' },
-  { value: 4, label: 'Third' },
-  { value: 6, label: 'Half' },
-  { value: 12, label: 'Full width' },
+  { value: 1, label: 'Small (1 column)' },
+  { value: 2, label: 'Medium (2 columns)' },
+  { value: 3, label: 'Large (3 columns)' },
+  { value: 4, label: 'Full Width (4 columns)' },
 ]
 
 const HEIGHT_OPTIONS = [
-  { value: 2, label: 'Short' },
-  { value: 3, label: 'Medium' },
-  { value: 4, label: 'Tall' },
-  { value: 6, label: 'Extra tall' },
+  { value: 1, label: 'Short' },
+  { value: 2, label: 'Medium' },
+  { value: 3, label: 'Tall' },
+  { value: 4, label: 'Extra Tall' },
 ]
 
 function toggleMetricInList(list: string[], metric: string, maxMetrics: number): string[] {
@@ -464,11 +462,11 @@ function SizeField({ ctx }: { ctx: FieldContext }) {
   return (
     <div className="grid grid-cols-2 gap-4">
       <div className="form-control">
-        <label className="label py-1">
-          <span className="label-text text-[13px]">Width</span>
+        <label className="label">
+          <span className="label-text font-semibold">Width</span>
         </label>
         <select
-          className="select select-bordered select-sm"
+          className="select select-bordered"
           value={values.width}
           onChange={(e) => setValues((v) => ({ ...v, width: Number(e.target.value) }))}
         >
@@ -478,11 +476,11 @@ function SizeField({ ctx }: { ctx: FieldContext }) {
         </select>
       </div>
       <div className="form-control">
-        <label className="label py-1">
-          <span className="label-text text-[13px]">Height</span>
+        <label className="label">
+          <span className="label-text font-semibold">Height</span>
         </label>
         <select
-          className="select select-bordered select-sm"
+          className="select select-bordered"
           value={values.height}
           onChange={(e) => setValues((v) => ({ ...v, height: Number(e.target.value) }))}
         >
@@ -594,9 +592,6 @@ function AddFlow({ onAdd, onClose }: { onAdd: AddFormProps['onAdd']; onClose: ()
   const selectType = (type: WidgetType) => {
     setWidgetType(type)
     setError(null)
-    // Seed a footprint that suits the type instead of one generic size.
-    const span = defaultSpanFor(type)
-    setValues((v) => ({ ...v, width: span.w, height: span.h }))
   }
 
   const handleSubmit = () => {
