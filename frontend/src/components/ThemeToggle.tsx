@@ -1,35 +1,20 @@
-import { useTheme, type ThemeName } from '../hooks/useTheme'
+import { useTheme } from '../hooks/useTheme'
+import Icon from './Icon'
 
-/**
- * Floating theme picker (task 15 design-system wiring).
- *
- * Fixed-position on purpose: it mounts in main.tsx next to <App/> so the
- * toggle works without touching the AppLayout shell owned by sibling todo 11.
- * The shell owner can relocate `<ThemeToggle />` into the navbar/sidebar with
- * a one-line move; behavior (data-theme + persistence) is unchanged.
- */
+/** Compact theme toggle: sun/moon swap button cycling the two lyncis themes. */
 export default function ThemeToggle({ className = '' }: { className?: string }) {
-  const { theme, setTheme, themes } = useTheme()
+  const { theme, setTheme } = useTheme()
+  const dark = theme !== 'lyncis-light'
 
   return (
-    <label
-      className={`fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-lg border border-base-300 bg-base-100/90 px-3 py-2 shadow-lg backdrop-blur ${className}`}
+    <button
+      type="button"
+      onClick={() => setTheme(dark ? 'lyncis-light' : 'lyncis')}
+      className={`btn btn-ghost btn-sm btn-square ${className}`}
+      title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+      aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
     >
-      <span className="text-xs font-semibold uppercase tracking-wide opacity-70">
-        Theme
-      </span>
-      <select
-        aria-label="Color theme"
-        className="select select-bordered select-xs"
-        value={theme}
-        onChange={(e) => setTheme(e.target.value as ThemeName)}
-      >
-        {themes.map((t) => (
-          <option key={t} value={t}>
-            {t}
-          </option>
-        ))}
-      </select>
-    </label>
+      <Icon name={dark ? 'sun' : 'moon'} className="size-[18px]" />
+    </button>
   )
 }

@@ -5,6 +5,9 @@ import { useDashboardConfig } from '../hooks'
 import { WidgetContainer } from '../components/widgets'
 import AddWidgetModal from '../components/AddWidgetModal'
 import EditWidgetModal from '../components/EditWidgetModal'
+import { PageHeader, EmptyState } from '../components/ui'
+import Icon from '../components/Icon'
+import toast from 'react-hot-toast'
 
 const GRID_COLUMNS = 5
 const GRID_MARGIN: [number, number] = [8, 6]
@@ -18,7 +21,6 @@ export default function Dashboard() {
 	const [isModalOpen, setIsModalOpen] = useState(false)
 	const [editingWidget, setEditingWidget] = useState<string | null>(null)
 	const [isSaving, setIsSaving] = useState(false)
-	const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle')
 	const [gridWidth, setGridWidth] = useState(() => {
 		if (typeof window !== 'undefined') {
 			return window.innerWidth
@@ -119,9 +121,9 @@ export default function Dashboard() {
 				const text = event.target?.result as string
 				const parsed = JSON.parse(text)
 				importConfig(parsed)
-				alert('Dashboard configuration imported successfully!')
+				toast.success('Dashboard configuration imported')
 			} catch (error) {
-				alert('Failed to import configuration')
+				toast.error('Failed to import configuration')
 				console.error(error)
 			}
 		}
@@ -130,112 +132,80 @@ export default function Dashboard() {
 
 	const handleSaveDashboard = async () => {
 		setIsSaving(true)
-		setSaveStatus('idle')
 		try {
 			const success = await saveConfig()
-			setSaveStatus(success ? 'success' : 'error')
+			if (success) toast.success('Dashboard saved')
+			else toast.error('Save failed')
 		} catch (error) {
 			console.error('Failed to save dashboard configuration:', error)
-			setSaveStatus('error')
+			toast.error('Save failed')
 		} finally {
 			setIsSaving(false)
-			setTimeout(() => setSaveStatus('idle'), 3000)
 		}
 	}
 
 	return (
-		<div className="p-6 space-y-6 min-h-screen">
-			<div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-				<div>
-					<h1 className="text-3xl font-bold">Dashboard</h1>
-					<p className="text-base-content/70">
-						Customize your view with modular widgets
-					</p>
-				</div>
-				<div className="flex flex-wrap items-center gap-2">
-					<div className="text-sm text-base-content/60">
-						<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-						</svg>
-						Auto-save enabled
-					</div>
-					<button
-						className="btn btn-outline btn-sm"
-						onClick={handleSaveDashboard}
-						disabled={isSaving}
-					>
-						{isSaving ? (
-							<svg className="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-								<circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-								<path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-							</svg>
-						) : (
-							<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-							</svg>
-						)}
-						Save Now
-					</button>
-					{saveStatus === 'success' && (
-						<span className="text-success text-sm">Saved!</span>
-					)}
-					{saveStatus === 'error' && (
-						<span className="text-error text-sm">Save failed</span>
-					)}
-					<button
-						className="btn btn-outline btn-sm"
-						onClick={handleExport}
-					>
-						<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-						</svg>
-						Export
-					</button>
-					<label className="btn btn-outline btn-sm">
-						<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-						</svg>
-						Import
-						<input
-							type="file"
-							accept="application/json"
-							className="hidden"
-							onChange={handleImport}
-						/>
-					</label>
-					<button
-						className="btn btn-primary btn-sm"
-						onClick={() => setIsModalOpen(true)}
-					>
-						<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-						</svg>
-						Add Widget
-					</button>
-				</div>
-			</div>
-
-			{config.widgets.length === 0 ? (
-				<div className="card bg-base-200 shadow-lg">
-					<div className="card-body items-center text-center py-16">
-						<svg xmlns="http://www.w3.org/2000/svg" className="h-24 w-24 text-base-content/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-							<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-						</svg>
-						<h2 className="text-2xl font-bold mt-4">No Widgets Yet</h2>
-						<p className="text-base-content/60 max-w-md">
-							Get started by adding your first widget. Choose from line charts, stat cards, gauges, or AI insights.
-						</p>
+		<div className="space-y-5">
+			<PageHeader
+				title="Dashboard"
+				hint="Live telemetry, arranged your way — changes auto-save"
+				actions={
+					<>
 						<button
-							className="btn btn-primary mt-6"
+							className="btn btn-ghost btn-sm gap-1.5"
+							onClick={handleSaveDashboard}
+							disabled={isSaving}
+						>
+							{isSaving ? (
+								<span className="loading loading-spinner loading-xs" />
+							) : (
+								<Icon name="check" className="size-4" />
+							)}
+							Save Now
+						</button>
+						<button
+							className="btn btn-ghost btn-sm gap-1.5"
+							onClick={handleExport}
+						>
+							<Icon name="download" className="size-4" />
+							Export
+						</button>
+						<label className="btn btn-ghost btn-sm gap-1.5 cursor-pointer">
+							<Icon name="upload" className="size-4" />
+							Import
+							<input
+								type="file"
+								accept="application/json"
+								className="hidden"
+								onChange={handleImport}
+							/>
+						</label>
+						<button
+							className="btn btn-primary btn-sm gap-1.5"
 							onClick={() => setIsModalOpen(true)}
 						>
-							<svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-							</svg>
-							Add Your First Widget
+							<Icon name="plus" className="size-4" />
+							Add Widget
 						</button>
-					</div>
-				</div>
+					</>
+				}
+			/>
+
+			{config.widgets.length === 0 ? (
+				<EmptyState
+					icon="chart-bars"
+					title="Empty dashboard"
+					hint="Add your first widget — charts, gauges, stats, or AI insights."
+					action={
+						<button
+							className="btn btn-primary btn-sm gap-1.5"
+							onClick={() => setIsModalOpen(true)}
+						>
+							<Icon name="plus" className="size-4" />
+							Add Widget
+						</button>
+					}
+				/>
 			) : (
 			<div className="w-full" ref={gridContainerRef}>
 				<GridLayout

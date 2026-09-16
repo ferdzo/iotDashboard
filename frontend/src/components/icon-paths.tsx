@@ -32,6 +32,10 @@ export const ICON_NAMES = [
   'signal',
   'arrow-left',
   'plus',
+  'sun',
+  'moon',
+  'download',
+  'upload',
   // weather (WeatherWidget seed)
   'sun',
   'cloud',
@@ -88,6 +92,22 @@ export const ICON_PATHS: Record<IconName, ReactNode> = {
   signal: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />,
   'arrow-left': <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />,
   plus: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />,
+  sun: (
+    <>
+      <circle cx="12" cy="12" r="4" />
+      <line x1="12" y1="2" x2="12" y2="5" />
+      <line x1="12" y1="19" x2="12" y2="22" />
+      <line x1="4.22" y1="4.22" x2="6.34" y2="6.34" />
+      <line x1="17.66" y1="17.66" x2="19.78" y2="19.78" />
+      <line x1="2" y1="12" x2="5" y2="12" />
+      <line x1="19" y1="12" x2="22" y2="12" />
+      <line x1="4.22" y1="19.78" x2="6.34" y2="17.66" />
+      <line x1="17.66" y1="6.34" x2="19.78" y2="4.22" />
+    </>
+  ),
+  moon: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />,
+  download: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />,
+  upload: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />,
 
   // --- weather (from WeatherWidget.tsx seed; pass strokeWidth={1.7} to match) ---
   sun: (
