@@ -30,6 +30,8 @@ class MQTTConfig:
     maxlen: int = 100000
     lag_warn: int = 50000
     pipeline_batch: int = 500
+    # Max seconds a partial batch waits before flush (bounds single-message latency)
+    flush_interval_sec: float = 1.0
 
 
 @dataclass
@@ -76,6 +78,7 @@ class Config:
                 os.getenv("MQTT_LAG_WARN", os.getenv("LAG_WARN", 50000))
             ),
             pipeline_batch=int(os.getenv("MQTT_PIPELINE_BATCH", 500)),
+            flush_interval_sec=float(os.getenv("MQTT_FLUSH_INTERVAL_SEC", 1.0)),
         )
         self.database = DatabaseConfig(
             url=os.getenv("DATABASE_URL", None),
