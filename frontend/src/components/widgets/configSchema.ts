@@ -47,8 +47,8 @@ export const DEFAULT_ADD_VALUES: WidgetFormValues = {
   calendarUrl: '',
   calendarRangeHours: 72,
   briefingType: 'full',
-  width: 3,
-  height: 3,
+  width: 4,
+  height: 4,
 }
 
 /** Context needed only for id generation + device-name lookup on add. */
@@ -302,8 +302,8 @@ export function editInitialValues(widget: WidgetConfig): WidgetFormValues {
     deviceIds: initialDeviceId ? [initialDeviceId] : [],
     metricIds: widget.metricIds || [],
     timeframeHours: widget.timeframe?.hours || 24,
-    width: widget.position?.w || 3,
-    height: widget.position?.h || 3,
+    width: widget.position?.w || 4,
+    height: widget.position?.h || 4,
     calendarUrl: widget.calendar?.icalUrl || widget.briefing?.calendarUrl || '',
     calendarRangeHours: widget.calendar?.timeRangeHours || widget.briefing?.calendarRangeHours || 72,
     briefingType: (widget.briefing?.briefingType as BriefingType) || 'full',

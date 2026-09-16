@@ -10,7 +10,7 @@ import AddWidgetModal from '../components/AddWidgetModal'
 import EditWidgetModal from '../components/EditWidgetModal'
 import { PageHeader, EmptyState } from '../components/ui'
 import Icon from '../components/Icon'
-import { GRID_COLS } from '../hooks/dashboardConfigSchema'
+import { GRID_COLS, defaultSpanFor } from '../hooks/dashboardConfigSchema'
 import toast from 'react-hot-toast'
 
 const ResponsiveGrid = WidthProvider(Responsive)
@@ -20,10 +20,8 @@ const BREAKPOINTS = { lg: 1200, md: 996, sm: 768, xs: 480 }
 const COLS = { lg: GRID_COLS, md: 8, sm: 4, xs: 2 }
 const CANONICAL_BREAKPOINT = 'lg'
 
-const ROW_HEIGHT = 56
+const ROW_HEIGHT = 72
 const GRID_MARGIN: [number, number] = [12, 12]
-
-const DEFAULT_SPAN = { w: 3, h: 3 }
 
 export default function Dashboard() {
 	const { config, addWidget, removeWidget, updateWidget, exportConfig, importConfig, saveConfig } = useDashboardConfig()
@@ -42,12 +40,13 @@ export default function Dashboard() {
 	const layouts = useMemo<Layouts>(() => {
 		const lg: Layout[] = config.widgets.map((widget) => {
 			const p = widget.position
+			const span = defaultSpanFor(widget.type)
 			return {
 				i: widget.id,
 				x: p?.x ?? 0,
 				y: p?.y ?? Infinity,
-				w: p?.w ?? DEFAULT_SPAN.w,
-				h: p?.h ?? DEFAULT_SPAN.h,
+				w: p?.w ?? span.w,
+				h: p?.h ?? span.h,
 				minW: 2,
 				minH: 2,
 				maxW: COLS.lg,

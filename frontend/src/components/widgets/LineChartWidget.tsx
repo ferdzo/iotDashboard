@@ -190,7 +190,9 @@ function LineChartWidget({ config }: LineChartWidgetProps) {
   if (chartData.length === 0) return <WidgetEmpty message="No data available for this metric" />
 
   return (
-    <div className="h-full min-h-0 tnum">
+    /* absolute fill: a percentage height in the flex chain can resolve to 0
+       when an ancestor uses min-h-0, which collapses the chart to a header. */
+    <div className="absolute inset-0 tnum">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart
           data={chartData}

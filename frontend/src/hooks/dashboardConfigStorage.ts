@@ -5,7 +5,7 @@
 import { dashboardLayoutApi } from '../api'
 import {
   STORAGE_KEY,
-  migrateGridColumns,
+  migrateGrid,
   safeParseDashboardConfig,
 } from './dashboardConfigSchema'
 import type { DashboardConfig } from './dashboardConfigSchema'
@@ -20,7 +20,7 @@ export function loadFromLocalStorage(): DashboardConfig | null {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (!stored) return null
     const parsed = safeParseDashboardConfig(stored)
-    return parsed ? migrateGridColumns(parsed) : null
+    return parsed ? migrateGrid(parsed) : null
   } catch (error) {
     console.error('Failed to load from localStorage:', error)
     return null
@@ -44,7 +44,7 @@ async function fetchDefaultLayout(): Promise<{ config: DashboardConfig; id: numb
       console.error('Default layout config failed validation, ignoring remote payload')
       return null
     }
-    return { config: migrateGridColumns(parsed), id: layout.id }
+    return { config: migrateGrid(parsed), id: layout.id }
   } catch {
     return null
   }

@@ -29,6 +29,7 @@ import type {
   WidgetTypeSchema,
 } from './widgets/configSchema'
 import { getWidgetSchema, widgetSchemaList } from './widgets/widgetSchemas'
+import { defaultSpanFor } from '../hooks/dashboardConfigSchema'
 
 export interface AddFormProps {
   mode: 'add'
@@ -593,6 +594,9 @@ function AddFlow({ onAdd, onClose }: { onAdd: AddFormProps['onAdd']; onClose: ()
   const selectType = (type: WidgetType) => {
     setWidgetType(type)
     setError(null)
+    // Seed a footprint that suits the type instead of one generic size.
+    const span = defaultSpanFor(type)
+    setValues((v) => ({ ...v, width: span.w, height: span.h }))
   }
 
   const handleSubmit = () => {
