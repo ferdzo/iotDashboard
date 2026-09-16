@@ -20,7 +20,15 @@ Microservices-based IoT platform with device management, mTLS authentication, an
 
 ## Bring-up runbook (fresh clone to working stack)
 
-Prerequisites: Docker with Compose v2, `uv`, `openssl`, port 3000/5432/6379/8000/8001/8883 free.
+Fast path — one command from the repo root (generates gitignored env
+files + PKI, builds, starts, migrates):
+
+```bash
+./scripts/bootstrap.sh
+```
+
+Prerequisites: Docker with Compose v2, `uv`, `openssl`, ports 3000/5432/6379/8000/8001/8883 free.
+What follows is exactly what the script does, step by step, for manual runs.
 
 1. **Validate compose** (must pass with zero local edits):
    `docker compose -f infrastructure/compose.yml config > /dev/null`
