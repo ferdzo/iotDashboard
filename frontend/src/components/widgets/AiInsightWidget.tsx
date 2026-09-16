@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { telemetryApi } from '../../api'
 import type { WidgetConfig } from '../../hooks'
+import { WidgetSkeleton, WidgetError, WidgetEmpty } from '../ui'
+import Icon from '../Icon'
 
 interface AiInsightWidgetProps {
   config: WidgetConfig
@@ -40,7 +42,7 @@ interface AnomalyDetection {
 }
 
 export default function AiInsightWidget({ config }: AiInsightWidgetProps) {
-  const { deviceIds, metricIds, timeframe, title } = config
+  const { deviceIds, metricIds, timeframe } = config
   const [promptType, setPromptType] = useState<'trend_summary' | 'anomaly_detection'>('trend_summary')
   const [showAnalysis, setShowAnalysis] = useState(false)
 
@@ -119,11 +121,8 @@ export default function AiInsightWidget({ config }: AiInsightWidgetProps) {
   }
 
   return (
-    <div className="card bg-base-100 shadow">
-      <div className="card-body">
-        <div className="flex items-center justify-between">
-          <h3 className="card-title text-base">{title || 'AI Environmental Insights'}</h3>
-          <div className="flex gap-2">
+    <div className="flex flex-col gap-2 min-h-0">
+        <div className="flex items-center justify-end gap-2 flex-wrap">
             <select
               className="select select-bordered select-sm"
               value={promptType}
@@ -144,35 +143,22 @@ export default function AiInsightWidget({ config }: AiInsightWidgetProps) {
                 </>
               ) : (
                 <>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                  </svg>
+                  <Icon name="bulb" className="size-4" />
                   Analyze
                 </>
               )}
             </button>
-          </div>
         </div>
 
         {isLoading && (
-          <div className="flex items-center justify-center py-12">
-            <div className="text-center space-y-4">
-              <span className="loading loading-spinner loading-lg text-primary"></span>
-              <p className="text-sm text-base-content/60">Analyzing environmental data...</p>
-            </div>
+          <div className="flex flex-col gap-2">
+            <WidgetSkeleton lines={4} />
+            <p className="text-sm text-base-content/60">Analyzing environmental data...</p>
           </div>
         )}
 
         {error && (
-          <div className="alert alert-error mt-4">
-            <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <div>
-              <div className="font-bold">Analysis Failed</div>
-              <div className="text-sm">{(error as Error)?.message || 'Could not connect to GPT service'}</div>
-            </div>
-          </div>
+          <WidgetError message={(error as Error)?.message || 'Could not connect to GPT service'} />
         )}
 
         {analysis && showAnalysis && !isLoading && (
@@ -428,14 +414,11 @@ export default function AiInsightWidget({ config }: AiInsightWidgetProps) {
         )}
 
         {!showAnalysis && (
-          <div className="text-center py-8 text-base-content/60">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-            </svg>
+          <div className="flex flex-col items-center gap-2 py-8 text-base-content/60">
+            <Icon name="bulb" className="size-10 opacity-50" />
             <p className="text-sm">Click Analyze to get AI-powered environmental insights</p>
           </div>
         )}
-      </div>
     </div>
   )
 }

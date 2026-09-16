@@ -3,6 +3,7 @@ import type { AxiosError } from 'axios'
 import ICAL from 'ical.js'
 import { calendarApi } from '../../api'
 import type { WidgetConfig } from '../../hooks'
+import { WidgetSkeleton, WidgetError, WidgetEmpty } from '../ui'
 import './widget-styles.css'
 
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000
@@ -204,28 +205,16 @@ export default function CalendarWidget({ config }: CalendarWidgetProps) {
   }
 
   if (!calendarConfig) {
-    return (
-      <div className="widget-card card bg-base-100 h-full">
-        <div className="card-body p-4 text-sm">
-          <h2 className="card-title text-sm mb-2">{config.title || 'Calendar'}</h2>
-          <p className="opacity-70">
-            Configure an iCal URL to see your agenda.
-          </p>
-        </div>
-      </div>
-    )
+    return <WidgetEmpty message="Configure an iCal URL to see your agenda." />
   }
 
   const rangeLabel = `Next ${calendarConfig.timeRangeHours || 72}h`
 
   return (
-    <div className="widget-card card bg-base-100 h-full">
-      <div className="card-body p-3 h-full flex flex-col gap-3">
+    <div className="flex flex-col gap-2 min-h-0 h-full">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <p className="text-xs uppercase tracking-wide opacity-60">Agenda</p>
-            <h2 className="card-title text-sm leading-tight">{config.title || 'Calendar'}</h2>
-            <p className="text-xs opacity-60">{rangeLabel}</p>
+            <p className="text-xs opacity-60 tnum">{rangeLabel}</p>
           </div>
           <div className="flex flex-col items-end gap-1">
             <button
@@ -244,11 +233,7 @@ export default function CalendarWidget({ config }: CalendarWidgetProps) {
           </div>
         </div>
 
-        {error && (
-          <div className="alert alert-error text-xs">
-            <span>{error}</span>
-          </div>
-        )}
+        {error && <WidgetError message={error} />}
 
         {!error && events.length === 0 && !isLoading && (
           <div className="flex-1 flex items-center justify-center text-sm opacity-60 text-center">
@@ -257,9 +242,7 @@ export default function CalendarWidget({ config }: CalendarWidgetProps) {
         )}
 
         {isLoading && events.length === 0 && (
-          <div className="flex-1 flex items-center justify-center">
-            <span className="loading loading-spinner"></span>
-          </div>
+          <WidgetSkeleton lines={3} />
         )}
 
         {events.length > 0 && (
@@ -302,7 +285,6 @@ export default function CalendarWidget({ config }: CalendarWidgetProps) {
             ))}
           </ul>
         )}
-      </div>
     </div>
   )
 }

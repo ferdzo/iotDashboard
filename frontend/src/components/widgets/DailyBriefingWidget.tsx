@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { wellnessApi } from '../../api'
 import type { WidgetConfig } from '../../hooks'
+import { WidgetSkeleton, WidgetError, WidgetEmpty } from '../ui'
 import './widget-styles.css'
 
 interface DailyBriefingWidgetProps {
@@ -124,30 +125,14 @@ export default function DailyBriefingWidget({ config }: DailyBriefingWidgetProps
 
   // No config state - show setup message
   if (!city) {
-    return (
-      <div className="widget-card card bg-base-100 h-full">
-        <div className="card-body p-4">
-          <h2 className="card-title text-sm">{config.title || 'Daily Briefing'}</h2>
-          <p className="text-sm opacity-70">
-            Configure a city to generate briefings.
-          </p>
-        </div>
-      </div>
-    )
+    return <WidgetEmpty message="Configure a city to generate briefings." />
   }
 
   return (
-    <div className="widget-card card bg-base-100 h-full flex flex-col">
-      <div className="card-body p-3 flex-1 flex flex-col gap-2 min-h-0">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <p className="text-xs uppercase tracking-wide opacity-60 flex items-center gap-1">
-              <CurrentIcon /> {getBriefingTypeInfo(briefingType).label} Briefing
-            </p>
-            <h2 className="card-title text-sm leading-tight">{config.title || 'Daily Briefing'}</h2>
-          </div>
-        </div>
+    <div className="flex flex-col gap-2 min-h-0 h-full">
+        <p className="text-xs uppercase tracking-wide opacity-60 flex items-center gap-1">
+          <CurrentIcon /> {getBriefingTypeInfo(briefingType).label} Briefing
+        </p>
 
         {/* Briefing Type Selector */}
         <div className="flex gap-1">
@@ -185,8 +170,8 @@ export default function DailyBriefingWidget({ config }: DailyBriefingWidgetProps
 
         {/* Loading State */}
         {isLoading && (
-          <div className="flex-1 flex flex-col items-center justify-center gap-2">
-            <span className="loading loading-spinner loading-lg"></span>
+          <div className="flex-1 flex flex-col gap-2">
+            <WidgetSkeleton lines={4} />
             <p className="text-sm opacity-60">Analyzing your environment...</p>
           </div>
         )}
@@ -194,16 +179,7 @@ export default function DailyBriefingWidget({ config }: DailyBriefingWidgetProps
         {/* Error State */}
         {error && !isLoading && (
           <div className="flex-1 flex flex-col gap-2">
-            <div className="alert alert-error text-xs">
-              <span>{error}</span>
-            </div>
-            <button
-              type="button"
-              className="btn btn-sm btn-outline"
-              onClick={generateBriefing}
-            >
-              Try Again
-            </button>
+            <WidgetError message={error} onRetry={generateBriefing} />
           </div>
         )}
 
@@ -260,7 +236,6 @@ export default function DailyBriefingWidget({ config }: DailyBriefingWidgetProps
             </div>
           </div>
         )}
-      </div>
     </div>
   )
 }
