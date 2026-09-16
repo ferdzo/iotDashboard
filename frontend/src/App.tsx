@@ -10,7 +10,7 @@ import DeviceList from './pages/DeviceList'
 import DeviceDetail from './pages/DeviceDetail'
 import AddDevice from './pages/AddDevice'
 import Login from './pages/Login'
-import './App.css'
+import './styles/globals.css'
 
 const queryClient = new QueryClient({
   defaultOptions: {

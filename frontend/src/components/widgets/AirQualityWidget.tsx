@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query'
 import type { WidgetConfig } from '../../hooks'
 import { weatherApi } from '../../api'
 import { WidgetSkeleton, WidgetError, WidgetEmpty } from '../ui'
-import './widget-styles.css'
 
 interface AirQualityWidgetProps {
   config: WidgetConfig

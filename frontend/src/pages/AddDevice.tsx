@@ -70,7 +70,7 @@ export default function AddDevice() {
         }
       />
 
-      <div className="card bg-base-100 border border-base-300/60">
+      <div className="panel rounded-xl">
         <div className="card-body">
           <h2 className="text-[13px] font-semibold uppercase tracking-wider text-base-content/55">Registration</h2>
 

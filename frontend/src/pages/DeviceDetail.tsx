@@ -65,7 +65,7 @@ export default function DeviceDetail() {
     return (
       <div className="space-y-6">
         <PageHeader title="Device" hint="Loading device details" />
-        <div className="card bg-base-100 border border-base-300/60">
+        <div className="panel rounded-xl">
           <div className="card-body">
             <WidgetSkeleton lines={5} />
           </div>
@@ -114,7 +114,7 @@ export default function DeviceDetail() {
         }
       />
 
-      <div className="card bg-base-100 border border-base-300/60">
+      <div className="panel rounded-xl">
         <div className="card-body gap-5">
           <div className="overflow-x-auto">
             <table className="table">

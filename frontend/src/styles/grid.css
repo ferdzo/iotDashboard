@@ -1,0 +1,51 @@
+/* React Grid Layout affordances.
+ *
+ * Replaces the dead Gridstack rules (gridstack was removed in favour of
+ * react-grid-layout). Only edit-mode chrome lives here: the placeholder,
+ * resize handles, and the interaction cursor.
+ */
+
+/* Drag/resize only respond in Arrange mode; elsewhere the grid is inert. */
+.layout {
+  position: relative;
+}
+
+.layout:not(.layout--editing) .react-grid-item {
+  transition: none;
+}
+
+/* Drop placeholder — primary-tinted, matches the panel radius */
+.react-grid-placeholder {
+  background: var(--color-primary) !important;
+  opacity: 0.16 !important;
+  border-radius: 0.75rem;
+  border: 1px dashed color-mix(in oklch, var(--color-primary) 55%, transparent);
+}
+
+/* Move cursor while dragging an item */
+.layout--editing .react-grid-item.react-draggable-dragging {
+  z-index: 30;
+  cursor: grabbing;
+}
+
+.layout--editing .react-grid-item.react-draggable-dragging .panel {
+  box-shadow: 0 18px 40px -20px rgb(0 0 0 / 0.7);
+}
+
+/* Resize handle: subtle corner grip that only shows in Arrange mode */
+.react-grid-item > .react-resizable-handle {
+  opacity: 0;
+  transition: opacity 0.15s ease-in-out;
+}
+
+.layout--editing .react-grid-item > .react-resizable-handle {
+  opacity: 0.55;
+}
+
+.layout--editing .react-grid-item > .react-resizable-handle:hover {
+  opacity: 1;
+}
+
+.react-grid-item > .react-resizable-handle::after {
+  border-color: var(--color-primary) !important;
+}

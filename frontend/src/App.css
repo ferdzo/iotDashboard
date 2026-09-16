@@ -1,8 +1,0 @@
-/* Backward-compat shim (task 15 design-system split).
- *
- * Canonical app-shell styles now live in ./styles/globals.css.
- * This file is kept so the existing `import './App.css'` in App.tsx keeps
- * working (that import is owned by sibling todo 11's dirty work).
- * TODO(todo 16 purge): drop this shim once the shell imports ./styles/globals.css directly.
- */
-@import "./styles/globals.css";

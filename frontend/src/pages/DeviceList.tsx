@@ -45,7 +45,7 @@ export default function DeviceList() {
         <PageHeader title="Devices" hint="Fleet registry and certificate health" />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
           {[1, 2, 3, 4].map((key) => (
-            <div key={key} className="card bg-base-100 border border-base-300/60">
+            <div key={key} className="panel rounded-xl">
               <div className="card-body p-4">
                 <WidgetSkeleton lines={2} />
               </div>
@@ -81,7 +81,7 @@ export default function DeviceList() {
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
             {[1, 2, 3, 4].map((key) => (
-              <div key={key} className="card bg-base-100 border border-base-300/60">
+              <div key={key} className="panel rounded-xl">
                 <div className="card-body p-4">
                   <WidgetSkeleton lines={2} />
                 </div>
@@ -91,7 +91,7 @@ export default function DeviceList() {
         )}
       </section>
 
-      <div className="card bg-base-100 border border-base-300/60 overflow-hidden">
+      <div className="panel rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="table w-full">
             <thead>

@@ -1,104 +1,81 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
-import GridLayout from 'react-grid-layout'
+import { useState, useCallback, useMemo } from 'react'
+import { Responsive, WidthProvider } from 'react-grid-layout'
+import type { Layout, Layouts } from 'react-grid-layout'
 import 'react-grid-layout/css/styles.css'
 import { useDashboardConfig } from '../hooks'
+import { useQuery } from '@tanstack/react-query'
+import { dashboardApi } from '../api'
 import { WidgetContainer } from '../components/widgets'
 import AddWidgetModal from '../components/AddWidgetModal'
 import EditWidgetModal from '../components/EditWidgetModal'
 import { PageHeader, EmptyState } from '../components/ui'
 import Icon from '../components/Icon'
+import { GRID_COLS } from '../hooks/dashboardConfigSchema'
 import toast from 'react-hot-toast'
 
-const GRID_COLUMNS = 5
-const GRID_MARGIN: [number, number] = [8, 6]
-const ROW_HEIGHT = 90
-const HEIGHT_PADDING = 0
-const ROW_UNIT = ROW_HEIGHT + GRID_MARGIN[1]
-const MAX_AUTO_ROWS = 6
+const ResponsiveGrid = WidthProvider(Responsive)
+
+/** Breakpoint column counts. lg is canonical: layouts persist from it only. */
+const BREAKPOINTS = { lg: 1200, md: 996, sm: 768, xs: 480 }
+const COLS = { lg: GRID_COLS, md: 8, sm: 4, xs: 2 }
+const CANONICAL_BREAKPOINT = 'lg'
+
+const ROW_HEIGHT = 56
+const GRID_MARGIN: [number, number] = [12, 12]
+
+const DEFAULT_SPAN = { w: 3, h: 3 }
 
 export default function Dashboard() {
 	const { config, addWidget, removeWidget, updateWidget, exportConfig, importConfig, saveConfig } = useDashboardConfig()
+	const { data: overview } = useQuery({
+		queryKey: ['dashboard', 'overview'],
+		queryFn: async () => (await dashboardApi.getOverview()).data,
+		staleTime: 15000,
+	})
 	const [isModalOpen, setIsModalOpen] = useState(false)
 	const [editingWidget, setEditingWidget] = useState<string | null>(null)
 	const [isSaving, setIsSaving] = useState(false)
-	const [gridWidth, setGridWidth] = useState(() => {
-		if (typeof window !== 'undefined') {
-			return window.innerWidth
-		}
-		return GRID_COLUMNS * (ROW_HEIGHT + GRID_MARGIN[0])
-	})
-	const gridContainerRef = useRef<HTMLDivElement>(null)
+	const [isEditing, setIsEditing] = useState(false)
+	const [breakpoint, setBreakpoint] = useState<string>(CANONICAL_BREAKPOINT)
 
-	// Update grid width on resize
-	useEffect(() => {
-		const updateWidth = () => {
-			if (gridContainerRef.current) {
-				const rect = gridContainerRef.current.getBoundingClientRect()
-				setGridWidth(rect.width)
-			} else if (typeof window !== 'undefined') {
-				setGridWidth(window.innerWidth)
-			}
-		}
-
-		updateWidth()
-		window.addEventListener('resize', updateWidth)
-		return () => window.removeEventListener('resize', updateWidth)
-	}, [])
-
-	const handleLayoutChange = (newLayout: GridLayout.Layout[]) => {
-		// Update widget positions when layout changes
-		newLayout.forEach((item) => {
-			const widget = config.widgets.find((w) => w.id === item.i)
-			if (widget) {
-				updateWidget(item.i, {
-					position: {
-						x: item.x,
-						y: item.y,
-						w: item.w,
-						h: item.h,
-					},
-				})
+	/** Canonical (desktop) layout derived from config; smaller breakpoints interpolate from it. */
+	const layouts = useMemo<Layouts>(() => {
+		const lg: Layout[] = config.widgets.map((widget) => {
+			const p = widget.position
+			return {
+				i: widget.id,
+				x: p?.x ?? 0,
+				y: p?.y ?? Infinity,
+				w: p?.w ?? DEFAULT_SPAN.w,
+				h: p?.h ?? DEFAULT_SPAN.h,
+				minW: 2,
+				minH: 2,
+				maxW: COLS.lg,
 			}
 		})
-	}
+		return { lg }
+	}, [config.widgets])
 
-	const layout = config.widgets.map((widget) => {
-		const position = widget.position ?? { x: 0, y: Infinity, w: 1, h: 1 }
-		return {
-			i: widget.id,
-			x: position.x ?? 0,
-			y: position.y ?? Infinity,
-			w: Math.max(position.w ?? 1, 1),
-			h: Math.max(position.h ?? 1, 1),
-			minW: 1,
-			minH: 1,
-			maxW: GRID_COLUMNS,
-		}
-	})
-
-	const handleWidgetHeightChange = useCallback(
-		(widgetId: string, contentHeight: number) => {
-			const widget = config.widgets.find((w) => w.id === widgetId)
-			if (!widget) return
-
-			const position = widget.position ?? { x: 0, y: Infinity, w: 1, h: 1 }
-			const currentRows = Math.max(position.h ?? 1, 1)
-			const desiredPixelHeight = contentHeight + HEIGHT_PADDING
-			const targetRows = Math.min(
-				MAX_AUTO_ROWS,
-				Math.max(1, Math.ceil(desiredPixelHeight / ROW_UNIT))
-			)
-
-			if (Math.abs(targetRows - currentRows) >= 1) {
-				updateWidget(widgetId, {
-					position: {
-						...position,
-						h: targetRows,
-					},
+	/**
+	 * Persist only the canonical breakpoint. Dragging on a narrow screen
+	 * reflows that breakpoint locally; it must not overwrite the desktop layout.
+	 */
+	const handleLayoutChange = useCallback(
+		(_current: Layout[], all: Layouts) => {
+			if (breakpoint !== CANONICAL_BREAKPOINT) return
+			const next = all[CANONICAL_BREAKPOINT]
+			if (!next) return
+			next.forEach((item) => {
+				const widget = config.widgets.find((w) => w.id === item.i)
+				if (!widget) return
+				const p = widget.position
+				if (p && p.x === item.x && p.y === item.y && p.w === item.w && p.h === item.h) return
+				updateWidget(item.i, {
+					position: { x: item.x, y: item.y, w: item.w, h: item.h },
 				})
-			}
+			})
 		},
-		[config.widgets, updateWidget]
+		[breakpoint, config.widgets, updateWidget],
 	)
 
 	const handleExport = () => {
@@ -128,6 +105,7 @@ export default function Dashboard() {
 			}
 		}
 		reader.readAsText(file)
+		e.target.value = ''
 	}
 
 	const handleSaveDashboard = async () => {
@@ -144,13 +122,25 @@ export default function Dashboard() {
 		}
 	}
 
+	const hasWidgets = config.widgets.length > 0
+
 	return (
 		<div className="space-y-5">
 			<PageHeader
 				title="Dashboard"
-				hint="Live telemetry, arranged your way — changes auto-save"
+				hint={isEditing ? 'Drag headers to move · drag corners to resize' : 'Live telemetry, arranged your way'}
 				actions={
 					<>
+						{hasWidgets && (
+							<button
+								className={`btn btn-sm gap-1.5 ${isEditing ? 'btn-primary' : 'btn-ghost'}`}
+								onClick={() => setIsEditing((v) => !v)}
+								aria-pressed={isEditing}
+							>
+								<Icon name={isEditing ? 'check' : 'edit'} className="size-4" />
+								{isEditing ? 'Done' : 'Arrange'}
+							</button>
+						)}
 						<button
 							className="btn btn-ghost btn-sm gap-1.5"
 							onClick={handleSaveDashboard}
@@ -159,9 +149,9 @@ export default function Dashboard() {
 							{isSaving ? (
 								<span className="loading loading-spinner loading-xs" />
 							) : (
-								<Icon name="check" className="size-4" />
+								<Icon name="download" className="size-4" />
 							)}
-							Save Now
+							Save
 						</button>
 						<button
 							className="btn btn-ghost btn-sm gap-1.5"
@@ -191,7 +181,35 @@ export default function Dashboard() {
 				}
 			/>
 
-			{config.widgets.length === 0 ? (
+			<section aria-label="Fleet status" className="panel relative overflow-hidden rounded-xl bg-gradient-to-r from-primary/[0.08] via-transparent to-transparent px-4 py-3">
+				<div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+					<span className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.14em] text-primary">
+						<span className="relative flex size-1.5">
+							<span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />
+							<span className="relative inline-flex size-1.5 rounded-full bg-primary" />
+						</span>
+						Live
+					</span>
+					<span className="font-mono text-sm tnum text-base-content/85">
+						{overview ? `${overview.active_devices}/${overview.total_devices} devices online` : '— devices online'}
+					</span>
+					<span className="font-mono text-sm tnum text-base-content/50">
+						{config.widgets.length} widget{config.widgets.length === 1 ? '' : 's'}
+					</span>
+					{overview && overview.certificates_expiring_soon > 0 && (
+						<span className="font-mono text-sm tnum text-warning">
+							{overview.certificates_expiring_soon} cert{overview.certificates_expiring_soon === 1 ? '' : 's'} expiring
+						</span>
+					)}
+					{isEditing && (
+						<span className="ml-auto font-mono text-[11px] uppercase tracking-[0.14em] text-primary">
+							Arrange mode
+						</span>
+					)}
+				</div>
+			</section>
+
+			{!hasWidgets ? (
 				<EmptyState
 					icon="chart-bars"
 					title="Empty dashboard"
@@ -207,34 +225,34 @@ export default function Dashboard() {
 					}
 				/>
 			) : (
-			<div className="w-full" ref={gridContainerRef}>
-				<GridLayout
-					className="layout"
-					layout={layout}
-					cols={GRID_COLUMNS}
+				<ResponsiveGrid
+					className={`layout ${isEditing ? 'layout--editing' : ''}`}
+					layouts={layouts}
+					breakpoints={BREAKPOINTS}
+					cols={COLS}
 					rowHeight={ROW_HEIGHT}
-					width={gridWidth}
-					onLayoutChange={handleLayoutChange}
-					draggableHandle=".drag-handle"
-					compactType="vertical"
-					preventCollision={false}
-					isResizable={true}
-					isDraggable={true}
 					margin={GRID_MARGIN}
 					containerPadding={[0, 0]}
+					draggableHandle=".widget-drag-handle"
+					isDraggable={isEditing}
+					isResizable={isEditing}
+					compactType="vertical"
+					preventCollision={false}
+					measureBeforeMount
+					onBreakpointChange={(bp: string) => setBreakpoint(bp)}
+					onLayoutChange={handleLayoutChange}
 				>
 					{config.widgets.map((widget) => (
 						<div key={widget.id} className="h-full">
 							<WidgetContainer
 								config={widget}
+								editing={isEditing}
 								onRemove={() => removeWidget(widget.id)}
 								onEdit={() => setEditingWidget(widget.id)}
-								onHeightChange={(height: number) => handleWidgetHeightChange(widget.id, height)}
 							/>
 						</div>
 					))}
-				</GridLayout>
-			</div>
+				</ResponsiveGrid>
 			)}
 
 			<AddWidgetModal

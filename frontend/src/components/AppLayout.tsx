@@ -18,7 +18,7 @@ export default function AppLayout() {
       <input id="main-drawer" type="checkbox" className="drawer-toggle" />
       <div className="drawer-content flex flex-col min-h-screen bg-base-200">
         {/* Mobile navbar */}
-        <div className="navbar bg-base-100 border-b border-base-300/60 lg:hidden px-3">
+        <div className="bg-base-100/80 backdrop-blur border-b border-base-300/60 lg:hidden flex items-center gap-2 px-3 h-14">
           <div className="flex-none">
             <label htmlFor="main-drawer" className="btn btn-ghost btn-sm btn-square" aria-label="Open menu">
               <Icon name="menu" className="size-5" />
@@ -46,7 +46,7 @@ export default function AppLayout() {
       {/* Sidebar */}
       <div className="drawer-side z-40">
         <label htmlFor="main-drawer" className="drawer-overlay"></label>
-        <aside className={`bg-base-100 border-r border-base-300/60 min-h-screen flex flex-col transition-all duration-200 ${sidebarCollapsed ? 'w-[68px]' : 'w-60'}`}>
+        <aside className={`bg-base-100/80 backdrop-blur border-r border-base-300/60 min-h-screen flex flex-col transition-all duration-200 ${sidebarCollapsed ? 'w-[68px]' : 'w-60'}`}>
           <div className={`flex items-center ${sidebarCollapsed ? 'justify-center px-2 pt-4' : 'gap-2.5 px-4 pt-5'}`}>
             <Link to="/" className="flex items-center gap-2.5 min-w-0" aria-label="Lyncis home">
               <span className="size-9 shrink-0 rounded-xl bg-primary/15 text-primary flex items-center justify-center">
@@ -63,13 +63,13 @@ export default function AppLayout() {
 
           <nav className={`${sidebarCollapsed ? 'px-2' : 'px-3'} mt-6`}>
             {!sidebarCollapsed && (
-              <p className="px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-base-content/45">
+              <p className="px-3 mb-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-base-content/40">
                 Monitor
               </p>
             )}
             <ul className="space-y-1">
               {NAV.map((item) => (
-                <li key={item.to}>
+                <li key={item.to} className="relative">
                   <NavLink
                     to={item.to}
                     end={item.end}
@@ -80,7 +80,7 @@ export default function AppLayout() {
                       } ${
                         isActive
                           ? 'bg-primary/10 text-primary font-medium'
-                          : 'text-base-content/70 hover:bg-base-200 hover:text-base-content'
+                          : 'text-base-content/65 hover:bg-[var(--surface-hover)] hover:text-base-content'
                       }`
                     }
                   >

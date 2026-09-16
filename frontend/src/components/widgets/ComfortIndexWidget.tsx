@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query'
 import { devicesApi } from '../../api'
 import type { WidgetConfig } from '../../hooks'
 import { WidgetSkeleton, WidgetError } from '../ui'
-import './widget-styles.css'
 
 type IconProps = { className?: string }
 

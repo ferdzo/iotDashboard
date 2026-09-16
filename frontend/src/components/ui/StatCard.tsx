@@ -18,7 +18,7 @@ const TONES: Record<NonNullable<StatCardProps['tone']>, { tile: string; value: s
 export default function StatCard({ icon, label, value, hint, tone = 'primary' }: StatCardProps) {
   const t = TONES[tone]
   return (
-    <div className="card bg-base-100 border border-base-300/60">
+    <div className="panel rounded-xl">
       <div className="card-body p-4 flex-row items-center gap-3">
         <div className={`size-10 shrink-0 rounded-xl flex items-center justify-center ${t.tile}`}>
           <Icon name={icon} className="size-5" />

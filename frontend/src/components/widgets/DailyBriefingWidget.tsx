@@ -2,7 +2,6 @@ import { useState, useCallback } from 'react'
 import { wellnessApi } from '../../api'
 import type { WidgetConfig } from '../../hooks'
 import { WidgetSkeleton, WidgetError, WidgetEmpty } from '../ui'
-import './widget-styles.css'
 
 interface DailyBriefingWidgetProps {
   config: WidgetConfig

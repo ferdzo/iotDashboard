@@ -4,7 +4,6 @@ import { useWellnessState } from '../../hooks/useWellness'
 import type { WidgetConfig } from '../../hooks'
 import { WidgetSkeleton, WidgetError, WidgetEmpty } from '../ui'
 import Icon from '../Icon'
-import './widget-styles.css'
 
 interface HealthStatsWidgetProps {
   config: WidgetConfig

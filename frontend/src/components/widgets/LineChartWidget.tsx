@@ -154,14 +154,14 @@ function LineChartWidget({ config }: LineChartWidgetProps) {
   }, [queries, metricIds])
 
   // Memoize colors to avoid recreating array
-  const colors = useMemo(() => 
+  const colors = useMemo(() =>
     visualization?.colors || [
-      '#3b82f6', // blue
-      '#10b981', // green
-      '#f59e0b', // amber
-      '#ef4444', // red
-      '#8b5cf6', // purple
-      '#ec4899', // pink
+      '#a3e635', // lime
+      '#38bdf8', // sky
+      '#fbbf24', // amber
+      '#f87171', // red
+      '#c084fc', // purple
+      '#22d3ee', // cyan
     ],
     [visualization?.colors]
   )

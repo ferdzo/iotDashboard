@@ -4,7 +4,6 @@ import ICAL from 'ical.js'
 import { calendarApi } from '../../api'
 import type { WidgetConfig } from '../../hooks'
 import { WidgetSkeleton, WidgetError, WidgetEmpty } from '../ui'
-import './widget-styles.css'
 
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000
 const MAX_EVENTS = 25

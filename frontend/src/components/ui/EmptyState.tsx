@@ -9,7 +9,7 @@ interface EmptyStateProps {
 
 export default function EmptyState({ icon = 'chip', title, hint, action }: EmptyStateProps) {
   return (
-    <div className="card bg-base-100 border border-base-300/60">
+    <div className="panel rounded-xl">
       <div className="card-body items-center text-center py-14">
         <div className="size-14 rounded-2xl bg-base-200 flex items-center justify-center">
           <Icon name={icon} className="size-7 text-base-content/40" />

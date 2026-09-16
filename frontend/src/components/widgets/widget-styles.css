@@ -1,8 +1,0 @@
-/* Backward-compat shim (task 15 design-system split).
- *
- * Canonical widget styles now live in ../../styles/widget-card.css.
- * This file is kept so the existing `import './widget-styles.css'` lines in
- * the six widget files keep working without touching those files.
- * TODO(todo 16 purge): drop this shim once widgets import ../../styles/widget-card.css directly.
- */
-@import "../../styles/widget-card.css";

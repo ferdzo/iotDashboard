@@ -58,7 +58,7 @@ export default function Login() {
 
       {/* Form panel */}
       <div className="flex items-center justify-center p-6">
-        <div className="card w-full max-w-sm bg-base-100 border border-base-300/60">
+        <div className="panel w-full max-w-sm rounded-xl">
           <div className="card-body gap-4">
             <div className="lg:hidden flex items-center gap-2">
               <span className="size-8 rounded-lg bg-primary/15 text-primary flex items-center justify-center">
