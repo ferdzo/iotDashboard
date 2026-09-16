@@ -1,5 +1,6 @@
 import redis
 import logging
+import time
 from datetime import datetime
 from src.config import config
 
@@ -22,6 +23,7 @@ class RedisWriter:
         self.lag_warn = config.mqtt.lag_warn
         self.pipeline_batch = max(1, config.mqtt.pipeline_batch)
         self._buffer: list[dict] = []
+        self._last_flush = time.monotonic()
         self.dropped_total = 0
         try:
             self.redis_client.ping()
@@ -34,7 +36,8 @@ class RedisWriter:
 
     def write_sensor_data(self, device_id: str, sensor_type: str, value: float) -> bool:
         """
-        Buffer one sensor reading; flush via pipeline once the batch is full.
+        Buffer one sensor reading; flush via pipeline once the batch is full
+        or the flush interval has elapsed (bounds single-message latency).
         - Stream: mqtt:ingestion (single stream, capped at config maxlen)
         Returns True when buffered/flushed, False only on Redis failure.
         Call flush() (or close()) to drain a partial trailing batch.
@@ -49,7 +52,10 @@ class RedisWriter:
                 "timestamp": timestamp,
             }
         )
-        if len(self._buffer) >= self.pipeline_batch:
+        now = time.monotonic()
+        if len(self._buffer) >= self.pipeline_batch or (
+            now - self._last_flush >= config.mqtt.flush_interval_sec
+        ):
             return self.flush()
         return True
 
@@ -63,6 +69,7 @@ class RedisWriter:
         if not self._buffer:
             return True
         batch, self._buffer = self._buffer, []
+        self._last_flush = time.monotonic()
         try:
             pipe = self.redis_client.pipeline(transaction=False)
             for entry in batch:
