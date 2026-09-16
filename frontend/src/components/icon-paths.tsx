@@ -21,6 +21,7 @@ export const ICON_NAMES = [
   'drag',
   'edit',
   'close',
+  'alert',
   // weather (WeatherWidget seed)
   'sun',
   'cloud',
@@ -66,6 +67,7 @@ export const ICON_PATHS: Record<IconName, ReactNode> = {
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
   ),
   close: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />,
+  alert: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />,
 
   // --- weather (from WeatherWidget.tsx seed; pass strokeWidth={1.7} to match) ---
   sun: (
