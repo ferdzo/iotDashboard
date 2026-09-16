@@ -3,7 +3,7 @@ export interface Device {
   name: string;
   location?: string;
   protocol: 'mqtt' | 'http' | 'webhook';
-  connection_config?: Record<string, any>;
+  connection_config?: Record<string, unknown>;
   is_active: boolean;
   created_at: string;
   certificate_status?: string;
@@ -37,7 +37,7 @@ export interface DeviceRegistrationRequest {
   name: string;
   location?: string;
   protocol?: 'mqtt' | 'http' | 'webhook';
-  connection_config?: Record<string, any>;
+  connection_config?: Record<string, unknown>;
 }
 
 export interface DeviceRegistrationResponse {

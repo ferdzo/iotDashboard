@@ -1,13 +1,5 @@
-import { createContext, useContext, useState, type ReactNode } from 'react'
-
-interface WellnessState {
-  healthDeviceId: string | null
-  city: string
-  setHealthDeviceId: (id: string | null) => void
-  setCity: (city: string) => void
-}
-
-const WellnessStateContext = createContext<WellnessState | undefined>(undefined)
+import { useState, type ReactNode } from 'react'
+import { WellnessStateContext } from './wellness-context'
 
 export function WellnessStateProvider({ children }: { children: ReactNode }) {
   const [healthDeviceId, setHealthDeviceId] = useState<string | null>(null)
@@ -25,14 +17,6 @@ export function WellnessStateProvider({ children }: { children: ReactNode }) {
       {children}
     </WellnessStateContext.Provider>
   )
-}
-
-export function useWellnessState() {
-  const context = useContext(WellnessStateContext)
-  if (context === undefined) {
-    throw new Error('useWellnessState must be used within WellnessStateProvider')
-  }
-  return context
 }
 
 

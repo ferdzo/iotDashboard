@@ -1,4 +1,5 @@
 import apiClient from '../lib/api-client';
+import type { DashboardConfig } from '../hooks/dashboardConfigSchema';
 import type {
   Device,
   DeviceRegistrationRequest,
@@ -178,7 +179,7 @@ export const dashboardLayoutApi = {
     apiClient.get<Array<{
       id: number
       name: string
-      config: any
+      config: DashboardConfig
       is_default: boolean
       created_at: string
       updated_at: string
@@ -188,7 +189,7 @@ export const dashboardLayoutApi = {
     apiClient.get<{
       id: number
       name: string
-      config: any
+      config: DashboardConfig
       is_default: boolean
       created_at: string
       updated_at: string
@@ -196,14 +197,14 @@ export const dashboardLayoutApi = {
 
   create: (data: {
     name: string
-    config: any
+    config: DashboardConfig
     is_default?: boolean
   }) =>
     apiClient.post('/dashboard-layouts/', data),
 
   update: (id: number, data: {
     name?: string
-    config?: any
+    config?: DashboardConfig
     is_default?: boolean
   }) =>
     apiClient.put(`/dashboard-layouts/${id}/`, data),

@@ -7,6 +7,8 @@ import type { AxiosError } from 'axios'
 import { devicesApi } from '../api'
 import DeviceCredentialsDialog from '../components/DeviceCredentialsDialog'
 import type { DeviceRegistrationRequest, DeviceRegistrationResponse } from '../types/api'
+import { PageHeader } from '../components/ui'
+import Icon from '../components/Icon'
 
 type DeviceRegistrationForm = DeviceRegistrationRequest
 
@@ -56,23 +58,21 @@ export default function AddDevice() {
   }
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <Link to="/devices" className="btn btn-ghost btn-sm mb-4">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
-          Back to Devices
-        </Link>
-        <h1 className="text-3xl font-bold">Add New Device</h1>
-      </div>
+    <div className="space-y-6 max-w-2xl">
+      <PageHeader
+        title="Add Device"
+        hint="Register a new IoT device — MQTT devices get a certificate automatically"
+        actions={
+          <Link to="/devices" className="btn btn-ghost btn-sm gap-1.5">
+            <Icon name="arrow-left" className="size-4" />
+            Devices
+          </Link>
+        }
+      />
 
-      <div className="card bg-base-100 shadow-xl max-w-2xl">
+      <div className="card bg-base-100 border border-base-300/60">
         <div className="card-body">
-          <h2 className="card-title">Device Registration</h2>
-          <p className="text-sm opacity-70 mb-4">
-            Register a new IoT device. For MQTT devices, a certificate will be automatically generated.
-          </p>
+          <h2 className="text-[13px] font-semibold uppercase tracking-wider text-base-content/55">Registration</h2>
 
           <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
             <div className="form-control">

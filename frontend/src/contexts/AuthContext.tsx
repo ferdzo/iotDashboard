@@ -1,5 +1,6 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { apiClient } from '../lib/api-client'
+import { AuthContext } from './auth-context'
 import {
   applyAuthHeader,
   clearSession,
@@ -7,14 +8,6 @@ import {
   setSession,
   subscribeSession,
 } from '../lib/auth-session'
-
-interface AuthContextType {
-  isAuthenticated: boolean
-  login: (username: string, password: string) => Promise<void>
-  logout: () => void
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 // Thin consumer of the session module: all storage/header/refresh logic
 // lives in lib/auth-session. This component only mirrors isAuthenticated
@@ -50,10 +43,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   )
-}
-
-export const useAuth = () => {
-  const context = useContext(AuthContext)
-  if (!context) throw new Error('useAuth must be used within AuthProvider')
-  return context
 }
