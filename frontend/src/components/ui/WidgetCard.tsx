@@ -17,12 +17,10 @@ interface WidgetCardProps {
 export default function WidgetCard({ title, subtitle, status, onEdit, onRemove, children }: WidgetCardProps) {
   return (
     <section className="panel flex h-full flex-col overflow-hidden rounded-xl">
-      <header className="flex items-start justify-between gap-2 px-4 pt-3.5 pb-1">
+      <header className="flex items-start justify-between gap-2 p-4 pb-2">
         <div className="min-w-0">
-          <h3 className="truncate font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-base-content/60">
-            {title}
-          </h3>
-          {subtitle && <p className="truncate text-[11px] text-base-content/40">{subtitle}</p>}
+          <h3 className="truncate text-sm font-semibold text-base-content">{title}</h3>
+          {subtitle && <p className="truncate text-xs text-base-content/60">{subtitle}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {status}
@@ -50,7 +48,7 @@ export default function WidgetCard({ title, subtitle, status, onEdit, onRemove, 
           )}
         </div>
       </header>
-      <div className="flex min-h-0 flex-1 flex-col px-4 pt-1 pb-4">{children}</div>
+      <div className="flex min-h-0 flex-1 flex-col p-4 pt-2">{children}</div>
     </section>
   )
 }

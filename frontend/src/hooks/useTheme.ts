@@ -3,19 +3,18 @@ import { useCallback, useState } from 'react'
 /**
  * Single source of truth for the dashboard color theme.
  *
- * - Signature themes: lyncis (dark-first default) + lyncis-light.
- * - Applied as `data-theme` on <html> (document.documentElement).
- * - Persisted in localStorage so it survives reload.
- * - Invalid stored/applied values fall back to DEFAULT_THEME (never blank).
+ * Uses daisyUI's stock light/dark themes (enabled in index.css) rather than a
+ * custom palette. Applied as `data-theme` on <html>, persisted in localStorage;
+ * an invalid stored value falls back to DEFAULT_THEME (never blank).
  */
 
 export const THEME_STORAGE_KEY = 'iot-dashboard-theme'
 
-export const THEMES = ['lyncis', 'lyncis-light'] as const
+export const THEMES = ['light', 'dark'] as const
 
 export type ThemeName = (typeof THEMES)[number]
 
-export const DEFAULT_THEME: ThemeName = 'lyncis'
+export const DEFAULT_THEME: ThemeName = 'light'
 
 export function isThemeName(value: unknown): value is ThemeName {
   return (

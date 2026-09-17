@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="lyncis">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <!-- <link rel="icon" type="image/svg+xml" href="/vite.svg" /> -->
@@ -10,7 +10,7 @@
       // THEME_STORAGE_KEY + THEMES in frontend/src/hooks/useTheme.ts.
       try {
         var t = localStorage.getItem('iot-dashboard-theme');
-        if (['lyncis', 'lyncis-light'].indexOf(t) < 0) t = 'lyncis';
+        if (['light', 'dark'].indexOf(t) < 0) t = 'light';
         document.documentElement.setAttribute('data-theme', t);
       } catch (e) {}
     </script>

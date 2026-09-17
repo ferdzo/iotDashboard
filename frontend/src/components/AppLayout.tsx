@@ -63,9 +63,7 @@ export default function AppLayout() {
 
           <nav className={`${sidebarCollapsed ? 'px-2' : 'px-3'} mt-6`}>
             {!sidebarCollapsed && (
-              <p className="px-3 mb-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-base-content/40">
-                Monitor
-              </p>
+              <p className="px-3 mb-1.5 text-xs font-medium text-base-content/50">Monitor</p>
             )}
             <ul className="space-y-1">
               {NAV.map((item) => (
